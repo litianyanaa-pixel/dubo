@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { createChart, AreaSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts'
+import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts'
 import { useMarketStore } from '@/stores/marketStore'
 
 export default function PriceChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const seriesRef = useRef<ISeriesApi<typeof AreaSeries> | null>(null)
+  const seriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null)
   const prices = useMarketStore((s) => s.prices)
   const kalPrice = prices['KAL'] ?? 1
 
@@ -38,11 +38,13 @@ export default function PriceChart() {
       },
     })
 
-    const series = chart.addSeries(AreaSeries, {
-      lineColor: '#00ff88',
-      topColor: 'rgba(0, 255, 136, 0.15)',
-      bottomColor: 'rgba(0, 255, 136, 0.01)',
-      lineWidth: 2,
+    const series = chart.addSeries(CandlestickSeries, {
+      upColor: '#00ff88',
+      downColor: '#ff3366',
+      borderUpColor: '#00ff88',
+      borderDownColor: '#ff3366',
+      wickUpColor: '#00ff88',
+      wickDownColor: '#ff3366',
       priceFormat: { type: 'price', precision: 4, minMove: 0.0001 },
     })
 
@@ -69,13 +71,16 @@ export default function PriceChart() {
 
   useEffect(() => {
     if (!seriesRef.current) return
-    const history = useMarketStore.getState().history['KAL']
-    if (!history || history.length === 0) return
+    const candles = useMarketStore.getState().candles['KAL']
+    if (!candles || candles.length === 0) return
 
-    const lastPoint = history[history.length - 1]
+    const last = candles[candles.length - 1]
     seriesRef.current.update({
-      time: Math.floor(lastPoint.time / 1000) as never,
-      value: lastPoint.price,
+      time: last.time as never,
+      open: last.open,
+      high: last.high,
+      low: last.low,
+      close: last.close,
     })
   }, [kalPrice])
 

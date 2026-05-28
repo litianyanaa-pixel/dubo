@@ -34,7 +34,7 @@ describe('gameStore', () => {
 
 describe('marketStore', () => {
   beforeEach(() => {
-    useMarketStore.setState({ prices: {}, prevPrices: {}, history: {} })
+    useMarketStore.setState({ prices: {}, prevPrices: {}, candles: {} })
   })
 
   it('initial state is empty', () => {
@@ -51,23 +51,25 @@ describe('marketStore', () => {
     expect(useMarketStore.getState().prevPrices['KAL']).toBe(1.01)
   })
 
-  it('tracks price history', () => {
+  it('tracks candles', () => {
     useMarketStore.getState().updatePrice('KAL', 1.01)
     useMarketStore.getState().updatePrice('KAL', 1.02)
 
-    const history = useMarketStore.getState().history['KAL']
-    expect(history).toHaveLength(2)
-    expect(history![0].price).toBe(1.01)
-    expect(history![1].price).toBe(1.02)
+    const candles = useMarketStore.getState().candles['KAL']
+    expect(candles).toBeDefined()
+    expect(candles!.length).toBeGreaterThanOrEqual(1)
+    const last = candles![candles!.length - 1]
+    expect(last.close).toBe(1.02)
+    expect(last.high).toBeGreaterThanOrEqual(last.low)
   })
 
-  it('history caps at 200 entries', () => {
-    for (let i = 0; i < 250; i++) {
+  it('candles caps at 300 entries', () => {
+    for (let i = 0; i < 350; i++) {
       useMarketStore.getState().updatePrice('KAL', 1 + i * 0.001)
     }
 
-    const history = useMarketStore.getState().history['KAL']
-    expect(history).toHaveLength(200)
+    const candles = useMarketStore.getState().candles['KAL']
+    expect(candles!.length).toBeLessThanOrEqual(300)
   })
 })
 
