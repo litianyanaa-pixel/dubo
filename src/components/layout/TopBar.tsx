@@ -1,7 +1,8 @@
 import { useGameStore } from '@/stores/gameStore'
 import { useMarketStore } from '@/stores/marketStore'
 import { useSentimentStore } from '@/stores/sentimentStore'
-import { formatPrice, formatPercent, formatTime } from '@/utils/format'
+import { usePlayerStore } from '@/stores/playerStore'
+import { formatPrice, formatPercent, formatTime, formatMoney } from '@/utils/format'
 import type { SpeedMultiplier } from '@/engine/core/types'
 
 export default function TopBar() {
@@ -11,6 +12,7 @@ export default function TopBar() {
   const kalPrice = useMarketStore((s) => s.prices['KAL'] ?? 1)
   const kalPrev = useMarketStore((s) => s.prevPrices['KAL'] ?? 1)
   const sentiment = useSentimentStore((s) => s.global)
+  const cash = usePlayerStore((s) => s.cash)
   const change = kalPrev !== 0 ? (kalPrice - kalPrev) / kalPrev : 0
 
   const sentimentColor = sentiment >= 60 ? 'bg-up' : sentiment <= 40 ? 'bg-down' : 'bg-warn'
@@ -62,6 +64,10 @@ export default function TopBar() {
       </div>
 
       <div className="flex-1" />
+
+      <span className="text-gold text-xs font-mono">{formatMoney(cash)}</span>
+
+      <div className="w-px h-5 bg-border-panel" />
 
       <span className="text-text-muted text-xs">Phase 1</span>
     </div>
