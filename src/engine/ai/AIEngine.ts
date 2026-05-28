@@ -107,7 +107,6 @@ export class AIEngine {
         : ['关注我，每日分析', '技术面看支撑位在...', '消息面平静，继续持有']
       return posts[Math.floor(Math.random() * posts.length)]
     }
-    }
   }
 
   private decideAndTrade(agent: AIAgent, market: MarketEngine, sentiment: number): void {
