@@ -72,6 +72,44 @@ export class AIEngine {
     }
   }
 
+  /** Called on L2 tick (every 3s). Some agents post on social media. */
+  socialTick(sentiment: number): { agentId: string; content: string; agentName: string } | null {
+    if (Math.random() > 0.4) return null
+    const agent = this.agents[Math.floor(Math.random() * this.agents.length)]
+    const content = this.generateSocialPost(agent, sentiment)
+    return { agentId: agent.id, content, agentName: agent.name }
+  }
+
+  private generateSocialPost(agent: AIAgent, sentiment: number): string {
+    const type = agent.type
+    if (sentiment > 70) {
+      // Greedy/hype posts
+      const posts = type === 'leek'
+        ? ['涨疯了！再不买就来不及了！', '这波牛市要上天', '梭哈梭哈，ALL IN！', '旁边的老王都赚了，我也要！']
+        : type === 'whale'
+        ? ['市场过热，注意风险', '泡沫正在形成', '我已减仓50%']
+        : ['跟着我买，稳赚不赔！', '内部消息：明天还有一波', '限时机会，错过拍大腿']
+      return posts[Math.floor(Math.random() * posts.length)]
+    } else if (sentiment < 30) {
+      // Fear/panic posts
+      const posts = type === 'leek'
+        ? ['完了完了，要崩了', '我已经亏了50%了...', '割肉跑了，受不了了', '有人救救市场吗']
+        : type === 'whale'
+        ? ['恐慌是买入的好时机', '别人恐惧我贪婪', '抄底机会到了']
+        : ['赶紧清仓！别问了！', '内部消息：还会继续跌', '跑得快的吃肉跑得慢的吃屎']
+      return posts[Math.floor(Math.random() * posts.length)]
+    } else {
+      // Neutral
+      const posts = type === 'leek'
+        ? ['今天横盘无聊', '有没有大佬分析一下？', '等方向明确再操作', '看了看钱包叹了口气']
+        : type === 'whale'
+        ? ['观望中', '等待信号', '市场进入整理期']
+        : ['关注我，每日分析', '技术面看支撑位在...', '消息面平静，继续持有']
+      return posts[Math.floor(Math.random() * posts.length)]
+    }
+    }
+  }
+
   private decideAndTrade(agent: AIAgent, market: MarketEngine, sentiment: number): void {
     const assets = market.getAllAssets()
     if (assets.length === 0) return

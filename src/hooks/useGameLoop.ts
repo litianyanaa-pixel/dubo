@@ -42,9 +42,19 @@ export function useGameLoop() {
       ai.tick(market, sentiment.getGlobal())
     })
 
-    // L2 (3s): sentiment update
+    // L2 (3s): sentiment update + AI social posts
     loop.onLayer(2 as TickLayer, () => {
       sentiment.update()
+
+      const socialPost = ai.socialTick(sentiment.getGlobal())
+      if (socialPost) {
+        useNewsStore.getState().addEntry({
+          id: `social_${Date.now()}`,
+          title: socialPost.agentName,
+          description: socialPost.content,
+          type: 'social',
+        })
+      }
     })
 
     // L3 (5s): random events + KOL posts
@@ -109,9 +119,9 @@ export function useGameLoop() {
     eventBus.on('ai:kol:post', (data) => {
       useNewsStore.getState().addEntry({
         id: `kol_${Date.now()}`,
-        title: 'KOL 发帖',
+        title: 'KOL 喊单',
         description: data.content,
-        type: 'ai_trade',
+        type: 'kol_post',
       })
     })
 
