@@ -78,6 +78,7 @@ describe('playerStore', () => {
     usePlayerStore.setState({
       cash: 100000,
       positions: {},
+      shorts: {},
       totalTrades: 0,
     })
   })
@@ -88,59 +89,72 @@ describe('playerStore', () => {
     expect(state.totalTrades).toBe(0)
   })
 
-  it('buy deducts cash and creates position', () => {
-    const result = usePlayerStore.getState().buy('KAL', 1.0, 1000)
+  it('openLong deducts cash and creates position', () => {
+    const result = usePlayerStore.getState().openLong('KAL', 1.0, 1000)
 
     expect(result).toBe(true)
     const state = usePlayerStore.getState()
     expect(state.cash).toBe(99000)
-    expect(state.positions['KAL']).toBeDefined()
     expect(state.positions['KAL']!.amount).toBe(1000)
     expect(state.positions['KAL']!.avgCost).toBe(1.0)
     expect(state.totalTrades).toBe(1)
   })
 
-  it('buy fails if insufficient cash', () => {
-    const result = usePlayerStore.getState().buy('KAL', 1.0, 200000)
-
-    expect(result).toBe(false)
-    expect(usePlayerStore.getState().cash).toBe(100000)
+  it('openLong fails if insufficient cash', () => {
+    expect(usePlayerStore.getState().openLong('KAL', 1.0, 200000)).toBe(false)
     expect(usePlayerStore.getState().totalTrades).toBe(0)
   })
 
-  it('sell adds cash and reduces position', () => {
-    usePlayerStore.getState().buy('KAL', 1.0, 1000)
-    const result = usePlayerStore.getState().sell('KAL', 1.05, 500)
-
-    expect(result).toBe(true)
-    const state = usePlayerStore.getState()
-    expect(state.cash).toBe(99000 + 525)
-    expect(state.positions['KAL']!.amount).toBe(500)
-    expect(state.totalTrades).toBe(2)
+  it('closeLong adds cash and reduces position', () => {
+    usePlayerStore.getState().openLong('KAL', 1.0, 1000)
+    expect(usePlayerStore.getState().closeLong('KAL', 1.05, 500)).toBe(true)
+    expect(usePlayerStore.getState().cash).toBe(99000 + 525)
+    expect(usePlayerStore.getState().positions['KAL']!.amount).toBe(500)
   })
 
-  it('sell fails if insufficient position', () => {
-    usePlayerStore.getState().buy('KAL', 1.0, 100)
-    const result = usePlayerStore.getState().sell('KAL', 1.0, 200)
-
-    expect(result).toBe(false)
-    expect(usePlayerStore.getState().totalTrades).toBe(1)
+  it('closeLong fails if insufficient position', () => {
+    usePlayerStore.getState().openLong('KAL', 1.0, 100)
+    expect(usePlayerStore.getState().closeLong('KAL', 1.0, 200)).toBe(false)
   })
 
-  it('sell removes position when amount reaches 0', () => {
-    usePlayerStore.getState().buy('KAL', 1.0, 100)
-    usePlayerStore.getState().sell('KAL', 1.0, 100)
-
+  it('closeLong removes position when amount reaches 0', () => {
+    usePlayerStore.getState().openLong('KAL', 1.0, 100)
+    usePlayerStore.getState().closeLong('KAL', 1.0, 100)
     expect(usePlayerStore.getState().positions['KAL']).toBeUndefined()
   })
 
-  it('buy averages cost on second purchase', () => {
-    usePlayerStore.getState().buy('KAL', 1.0, 100)
-    usePlayerStore.getState().buy('KAL', 2.0, 100)
-
+  it('openLong averages cost on second purchase', () => {
+    usePlayerStore.getState().openLong('KAL', 1.0, 100)
+    usePlayerStore.getState().openLong('KAL', 2.0, 100)
     const pos = usePlayerStore.getState().positions['KAL']!
     expect(pos.amount).toBe(200)
     expect(pos.avgCost).toBe(1.5)
+  })
+
+  it('openShort creates short position', () => {
+    expect(usePlayerStore.getState().openShort('KAL', 1.0, 1000)).toBe(true)
+    const state = usePlayerStore.getState()
+    expect(state.shorts['KAL']!.amount).toBe(1000)
+    expect(state.shorts['KAL']!.avgEntry).toBe(1.0)
+    expect(state.cash).toBe(99000)
+    expect(state.totalTrades).toBe(1)
+  })
+
+  it('openShort fails if insufficient margin', () => {
+    expect(usePlayerStore.getState().openShort('KAL', 100, 2000)).toBe(false)
+  })
+
+  it('closeShort removes short and adjusts cash', () => {
+    usePlayerStore.getState().openShort('KAL', 1.0, 1000)
+    // Cover at lower price = profit $200
+    expect(usePlayerStore.getState().closeShort('KAL', 0.8, 1000)).toBe(true)
+    expect(usePlayerStore.getState().cash).toBe(99200) // 99000 + 200
+    expect(usePlayerStore.getState().shorts['KAL']).toBeUndefined()
+  })
+
+  it('closeShort fails if insufficient short position', () => {
+    usePlayerStore.getState().openShort('KAL', 1.0, 100)
+    expect(usePlayerStore.getState().closeShort('KAL', 1.0, 200)).toBe(false)
   })
 })
 

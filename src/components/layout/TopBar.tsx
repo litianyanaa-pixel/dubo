@@ -18,14 +18,18 @@ export default function TopBar() {
   const sentiment = useSentimentStore((s) => s.global)
   const cash = usePlayerStore((s) => s.cash)
   const positions = usePlayerStore((s) => s.positions)
+  const shorts = usePlayerStore((s) => s.shorts)
   const selectedAsset = useSelectionStore((s) => s.selectedAsset)
   const setSelectedAsset = useSelectionStore((s) => s.setSelectedAsset)
 
   // Calculate portfolio value
-  const positionValue = Object.entries(positions).reduce((sum, [id, pos]) => {
+  const longValue = Object.entries(positions).reduce((sum, [id, pos]) => {
     return sum + pos.amount * (prices[id] ?? 0)
   }, 0)
-  const totalValue = cash + positionValue
+  const shortPnl = Object.entries(shorts).reduce((sum, [id, pos]) => {
+    return sum + (pos.avgEntry - (prices[id] ?? pos.avgEntry)) * pos.amount
+  }, 0)
+  const totalValue = cash + longValue + shortPnl
   const totalPnl = totalValue - startCash
   const pnlPct = startCash > 0 ? totalPnl / startCash : 0
 

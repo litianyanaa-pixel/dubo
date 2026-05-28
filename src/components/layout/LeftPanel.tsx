@@ -105,7 +105,7 @@ function CreateTab({ cash, addEntry }: { cash: number; addEntry: ReturnType<type
     if (!canAfford) return
 
     const playerStore = usePlayerStore.getState()
-    playerStore.buy('COST', template.cost, 1) // Deduct cost
+    usePlayerStore.setState({ cash: playerStore.cash - template.cost })
 
     const asset = targetAsset
     const priceImpact = template.priceDirection === 'up' ? template.priceMagnitude : -template.priceMagnitude
