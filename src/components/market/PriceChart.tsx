@@ -18,6 +18,7 @@ export default function PriceChart() {
         textColor: '#888899',
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontSize: 11,
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: '#1e1e2e' },
