@@ -10,7 +10,7 @@ export interface EventMap {
   'sentiment:changed': { global: number }
   'speed:changed': { speed: number }
   // Phase 2 events
-  'ai:trade': { agentId: string; assetId: string; amount: number }
+  'ai:trade': { agentId: string; assetId: string; side: 'buy' | 'sell'; amount: number }
   'ai:kol:post': { agentId: string; content: string }
   'news:published': { id: string; templateId: string; targetCountry: string }
   'news:debunked': { id: string }

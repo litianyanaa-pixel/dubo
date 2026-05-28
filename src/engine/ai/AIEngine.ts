@@ -178,6 +178,7 @@ export class AIEngine {
     eventBus.emit('ai:trade', {
       agentId: agent.id,
       assetId: asset.id,
+      side,
       amount,
     })
   }

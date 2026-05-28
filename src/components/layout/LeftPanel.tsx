@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNewsStore, NEWS_TYPES, TRADE_TYPES, SOCIAL_TYPES, type FeedType } from '@/stores/newsStore'
+import { useNewsStore, NEWS_TYPES, TRADE_TYPES, SOCIAL_TYPES, type FeedType, type NewsEntry } from '@/stores/newsStore'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useMarketStore } from '@/stores/marketStore'
 import { useSentimentStore } from '@/stores/sentimentStore'
@@ -17,36 +17,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'create', label: '造假' },
 ]
 
-function typeColor(type: FeedType): string {
-  switch (type) {
-    case 'event': return 'bg-warn/5 border-warn/20'
-    case 'fake_news': return 'bg-danger/5 border-danger/20'
-    case 'ai_trade': return 'bg-info/5 border-info/20'
-    case 'player_trade': return 'bg-up/5 border-up/20'
-    case 'kol_post': return 'bg-crypto/5 border-crypto/20'
-    case 'social': return 'bg-bg-panel-hover border-border-highlight'
-  }
-}
-
-function typeText(type: FeedType): string {
-  switch (type) {
-    case 'event': return 'text-warn'
-    case 'fake_news': return 'text-danger'
-    case 'kol_post': return 'text-crypto'
-    default: return 'text-text-primary'
-  }
-}
-
-function typeIcon(type: FeedType): string {
-  switch (type) {
-    case 'event': return '⚡'
-    case 'fake_news': return '🎭'
-    case 'ai_trade': return '📊'
-    case 'player_trade': return '💰'
-    case 'kol_post': return '📢'
-    case 'social': return '💬'
-  }
-}
+const AGENT_ICONS: Record<string, string> = { leek: '🥬', whale: '🐋', scammer: '🎭' }
 
 export default function LeftPanel() {
   const [tab, setTab] = useState<Tab>('news')
@@ -91,32 +62,39 @@ export default function LeftPanel() {
         ))}
       </div>
 
-      {/* Content */}
       {tab === 'create' ? (
         <CreateTab />
+      ) : tab === 'trades' ? (
+        <TradeFeed listRef={listRef} entries={filtered} />
       ) : (
         <div ref={listRef} className="flex-1 overflow-y-auto space-y-1.5 scroll-smooth">
           {filtered.length === 0 && (
             <p className="text-text-muted text-xs animate-pulse mt-4 text-center">
-              {tab === 'news' ? '等待新闻...' : tab === 'trades' ? '等待交易...' : '等待舆论...'}
+              {tab === 'news' ? '等待新闻...' : '等待舆论...'}
             </p>
           )}
           {filtered.map((entry, i) => (
             <div
               key={`${entry.id}_${i}`}
-              className={`rounded px-2 py-1.5 text-xs border animate-[slideIn_0.3s_ease-out] ${typeColor(entry.type)}`}
+              className={`rounded px-2 py-1.5 text-xs border animate-[slideIn_0.3s_ease-out] ${
+                entry.type === 'event' ? 'bg-warn/5 border-warn/20'
+                : entry.type === 'fake_news' ? 'bg-danger/5 border-danger/20'
+                : entry.type === 'kol_post' ? 'bg-crypto/5 border-crypto/20'
+                : 'bg-bg-panel-hover border-border-highlight'
+              }`}
             >
               <div className="flex justify-between items-start gap-1">
-                <span className={typeText(entry.type)}>
-                  {entry.icon ?? typeIcon(entry.type)} {entry.title}
+                <span className={
+                  entry.type === 'event' ? 'text-warn'
+                  : entry.type === 'fake_news' ? 'text-danger'
+                  : entry.type === 'kol_post' ? 'text-crypto'
+                  : 'text-text-primary'
+                }>
+                  {entry.type === 'event' ? '⚡' : entry.type === 'fake_news' ? '🎭' : entry.type === 'kol_post' ? '📢' : '💬'} {entry.title}
                 </span>
-                <span className="text-text-muted whitespace-nowrap text-[10px]">
-                  {formatTime(entry.time)}
-                </span>
+                <span className="text-text-muted whitespace-nowrap text-[10px]">{formatTime(entry.time)}</span>
               </div>
-              {entry.description && (
-                <p className="text-text-muted mt-0.5">{entry.description}</p>
-              )}
+              {entry.description && <p className="text-text-muted mt-0.5">{entry.description}</p>}
             </div>
           ))}
         </div>
@@ -125,6 +103,58 @@ export default function LeftPanel() {
   )
 }
 
+// --- Trade feed: stock software style ---
+const TradeFeed = ({ listRef, entries }: { listRef: React.RefObject<HTMLDivElement | null>; entries: NewsEntry[] }) => {
+  return (
+    <div ref={listRef} className="flex-1 overflow-y-auto scroll-smooth font-mono text-[11px]">
+      {/* Header */}
+      <div className="flex items-center px-1 py-1 border-b border-border-panel text-text-muted text-[10px] sticky top-0 bg-bg-panel">
+        <span className="w-[72px]">时间</span>
+        <span className="w-[56px]">交易者</span>
+        <span className="w-[36px] text-center">方向</span>
+        <span className="w-[40px] text-right">手数</span>
+        <span className="flex-1 text-right">品种</span>
+      </div>
+
+      {entries.length === 0 && (
+        <p className="text-text-muted text-xs animate-pulse mt-4 text-center">等待交易...</p>
+      )}
+
+      <div className="divide-y divide-border-panel/50">
+        {entries.map((entry, i) => {
+          const isBuy = entry.side === 'buy'
+          const dirColor = isBuy ? 'text-up' : 'text-down'
+          const bgColor = isBuy ? 'bg-up/[0.03]' : 'bg-down/[0.03]'
+          const icon = entry.agentType ? AGENT_ICONS[entry.agentType] ?? '' : entry.type === 'player_trade' ? '💰' : '📊'
+          const bigTag = entry.isBigOrder ? <span className="text-warn text-[9px] ml-0.5">大单</span> : null
+
+          return (
+            <div
+              key={`${entry.id}_${i}`}
+              className={`flex items-center px-1 py-0.5 animate-[slideIn_0.2s_ease-out] ${bgColor}`}
+            >
+              <span className="w-[72px] text-text-muted">{formatTime(entry.time)}</span>
+              <span className="w-[56px] truncate text-text-secondary">
+                {icon} {entry.title.length > 5 ? entry.title.slice(0, 5) : entry.title}
+              </span>
+              <span className={`w-[36px] text-center font-bold ${dirColor}`}>
+                {isBuy ? '▲ 多' : '▼ 空'}
+              </span>
+              <span className={`w-[40px] text-right ${dirColor}`}>
+                {entry.lots ?? '-'}手{bigTag}
+              </span>
+              <span className="flex-1 text-right text-text-muted">
+                {entry.assetId ?? ''}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// --- Create tab (fake news) ---
 function CreateTab() {
   const [selectedTemplate, setSelectedTemplate] = useState(0)
   const [targetAsset, setTargetAsset] = useState('KAL')
@@ -169,13 +199,9 @@ function CreateTab() {
         <label className="text-text-muted text-xs">目标资产</label>
         <div className="flex flex-wrap gap-1 mt-1">
           {ALL_ASSETS.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => setTargetAsset(a.id)}
+            <button key={a.id} onClick={() => setTargetAsset(a.id)}
               className={`px-1.5 py-0.5 rounded text-[10px] ${targetAsset === a.id ? 'bg-warn/20 text-warn border border-warn/30' : 'bg-bg-primary text-text-secondary'}`}
-            >
-              {a.id}
-            </button>
+            >{a.id}</button>
           ))}
         </div>
       </div>
@@ -184,20 +210,12 @@ function CreateTab() {
         <label className="text-text-muted text-xs">新闻模板</label>
         <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
           {NEWS_TEMPLATES.map((t, i) => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedTemplate(i)}
-              className={`w-full text-left px-2 py-1 rounded text-xs ${
-                selectedTemplate === i
-                  ? 'bg-warn/10 border border-warn/30 text-text-primary'
-                  : 'bg-bg-primary text-text-secondary hover:bg-bg-panel-hover'
-              }`}
+            <button key={t.id} onClick={() => setSelectedTemplate(i)}
+              className={`w-full text-left px-2 py-1 rounded text-xs ${selectedTemplate === i ? 'bg-warn/10 border border-warn/30 text-text-primary' : 'bg-bg-primary text-text-secondary hover:bg-bg-panel-hover'}`}
             >
               <div className="flex justify-between">
                 <span>{t.title}</span>
-                <span className={t.priceDirection === 'up' ? 'text-up' : 'text-down'}>
-                  {t.priceDirection === 'up' ? '▲' : '▼'}
-                </span>
+                <span className={t.priceDirection === 'up' ? 'text-up' : 'text-down'}>{t.priceDirection === 'up' ? '▲' : '▼'}</span>
               </div>
             </button>
           ))}
@@ -208,26 +226,14 @@ function CreateTab() {
         <p className="text-text-primary text-xs font-bold">{template.title}</p>
         <p className="text-text-muted text-xs mt-1">{template.description.replace('{target}', targetAsset)}</p>
         <div className="flex gap-3 mt-2 text-[10px]">
-          <span className={template.priceDirection === 'up' ? 'text-up' : 'text-down'}>
-            冲击: {(template.priceMagnitude * 100).toFixed(1)}%
-          </span>
-          <span className={template.sentimentMagnitude > 0 ? 'text-up' : 'text-down'}>
-            情绪: {template.sentimentMagnitude > 0 ? '+' : ''}{template.sentimentMagnitude}
-          </span>
+          <span className={template.priceDirection === 'up' ? 'text-up' : 'text-down'}>冲击: {(template.priceMagnitude * 100).toFixed(1)}%</span>
+          <span className={template.sentimentMagnitude > 0 ? 'text-up' : 'text-down'}>情绪: {template.sentimentMagnitude > 0 ? '+' : ''}{template.sentimentMagnitude}</span>
         </div>
         <p className="text-gold text-xs mt-1">成本: {formatMoney(template.cost)}</p>
       </div>
 
-      <button
-        onClick={handlePublish}
-        disabled={!canAfford || published}
-        className={`w-full py-2 rounded font-bold text-sm ${
-          published
-            ? 'bg-up/20 text-up border border-up/40'
-            : canAfford
-              ? 'bg-danger/20 text-danger border border-danger/40 hover:bg-danger/30'
-              : 'bg-bg-primary text-text-muted border border-border-panel cursor-not-allowed'
-        }`}
+      <button onClick={handlePublish} disabled={!canAfford || published}
+        className={`w-full py-2 rounded font-bold text-sm ${published ? 'bg-up/20 text-up border border-up/40' : canAfford ? 'bg-danger/20 text-danger border border-danger/40 hover:bg-danger/30' : 'bg-bg-primary text-text-muted border border-border-panel cursor-not-allowed'}`}
       >
         {published ? '已发布！' : canAfford ? `发布假新闻 (-${formatMoney(template.cost)})` : '资金不足'}
       </button>

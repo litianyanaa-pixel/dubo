@@ -9,6 +9,12 @@ export interface NewsEntry {
   time: number
   type: FeedType
   icon?: string
+  // Trade-specific fields
+  side?: 'buy' | 'sell'
+  assetId?: string
+  lots?: number
+  isBigOrder?: boolean
+  agentType?: 'leek' | 'whale' | 'scammer'
 }
 
 interface NewsState {
@@ -24,7 +30,6 @@ export const useNewsStore = create<NewsState>((set, get) => ({
   },
 }))
 
-// Filter helpers
 export const NEWS_TYPES: FeedType[] = ['event', 'fake_news']
 export const TRADE_TYPES: FeedType[] = ['ai_trade', 'player_trade']
 export const SOCIAL_TYPES: FeedType[] = ['kol_post', 'social']

@@ -107,11 +107,19 @@ export function useGameLoop() {
     eventBus.on('ai:trade', (data) => {
       const agent = ai.getAgents().find((a) => a.id === data.agentId)
       if (agent) {
+        const price = useMarketStore.getState().prices[data.assetId] ?? 1
+        const lots = Math.round(data.amount / price)
+        const isBig = data.amount > 50000
         useNewsStore.getState().addEntry({
           id: `trade_${Date.now()}_${data.agentId}`,
-          title: `${agent.name} ${data.amount > 50000 ? '大额' : ''}${data.amount > 10000 && data.amount <= 50000 ? '中额' : '小额'}交易`,
-          description: `${agent.type === 'whale' ? '🐋' : agent.type === 'scammer' ? '🎭' : '🥬'} ${agent.name} 交易了 ${data.assetId}`,
+          title: agent.name,
+          description: `${data.assetId} ${data.side === 'buy' ? '多' : '空'}${lots}手${isBig ? '（大单）' : ''}`,
           type: 'ai_trade',
+          side: data.side,
+          assetId: data.assetId,
+          lots,
+          isBigOrder: isBig,
+          agentType: agent.type,
         })
       }
     })
