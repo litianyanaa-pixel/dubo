@@ -3,7 +3,7 @@ import { useMarketStore } from '@/stores/marketStore'
 import { useSentimentStore } from '@/stores/sentimentStore'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useSelectionStore } from '@/stores/selectionStore'
-import { formatPrice, formatPercent, formatTime, formatMoney } from '@/utils/format'
+import { formatPrice, formatPercent, formatMoney } from '@/utils/format'
 import { ALL_ASSETS } from '@/data/assets'
 import type { SpeedMultiplier } from '@/engine/core/types'
 
@@ -11,18 +11,51 @@ export default function TopBar() {
   const speed = useGameStore((s) => s.speed)
   const elapsed = useGameStore((s) => s.elapsed)
   const setSpeed = useGameStore((s) => s.setSpeed)
+  const character = useGameStore((s) => s.character)
+  const startCash = useGameStore((s) => s.startCash)
   const prices = useMarketStore((s) => s.prices)
   const prevPrices = useMarketStore((s) => s.prevPrices)
   const sentiment = useSentimentStore((s) => s.global)
   const cash = usePlayerStore((s) => s.cash)
+  const positions = usePlayerStore((s) => s.positions)
   const selectedAsset = useSelectionStore((s) => s.selectedAsset)
   const setSelectedAsset = useSelectionStore((s) => s.setSelectedAsset)
+
+  // Calculate portfolio value
+  const positionValue = Object.entries(positions).reduce((sum, [id, pos]) => {
+    return sum + pos.amount * (prices[id] ?? 0)
+  }, 0)
+  const totalValue = cash + positionValue
+  const totalPnl = totalValue - startCash
+  const pnlPct = startCash > 0 ? totalPnl / startCash : 0
+
+  // Game day: 60 real seconds = 1 game day
+  const gameDay = Math.floor(elapsed / 60000) + 1
 
   const sentimentColor = sentiment >= 60 ? 'bg-up' : sentiment <= 40 ? 'bg-down' : 'bg-warn'
 
   return (
     <div className="h-10 flex items-center gap-3 px-4 bg-bg-panel border-b border-border-panel text-sm">
-      <span className="font-display text-up text-base">运筹帷幄</span>
+      {/* Character */}
+      <span className="font-display text-up text-base">
+        {character?.icon} {character?.name ?? '???'}
+      </span>
+
+      <div className="w-px h-5 bg-border-panel" />
+
+      {/* Net worth */}
+      <div className="flex items-center gap-2">
+        <span className="text-text-muted text-xs">净值</span>
+        <span className="text-gold font-mono text-xs">{formatMoney(totalValue)}</span>
+        <span className={`text-xs font-mono ${totalPnl >= 0 ? 'text-up' : 'text-down'}`}>
+          {totalPnl >= 0 ? '+' : ''}{formatMoney(totalPnl)} ({formatPercent(pnlPct)})
+        </span>
+      </div>
+
+      <div className="w-px h-5 bg-border-panel" />
+
+      {/* Day counter */}
+      <span className="text-text-secondary text-xs">Day {gameDay}</span>
 
       <div className="w-px h-5 bg-border-panel" />
 
@@ -54,6 +87,7 @@ export default function TopBar() {
 
       <div className="w-px h-5 bg-border-panel" />
 
+      {/* Speed */}
       <div className="flex gap-1">
         {([0, 1, 2, 3] as SpeedMultiplier[]).map((s) => (
           <button
@@ -72,10 +106,7 @@ export default function TopBar() {
 
       <div className="w-px h-5 bg-border-panel" />
 
-      <span className="text-text-secondary font-mono">{formatTime(elapsed)}</span>
-
-      <div className="w-px h-5 bg-border-panel" />
-
+      {/* Sentiment */}
       <div className="flex items-center gap-2">
         <span className="text-text-muted text-xs">情绪</span>
         <div className="w-20 h-2 bg-bg-primary rounded-full overflow-hidden">
@@ -89,6 +120,7 @@ export default function TopBar() {
 
       <div className="flex-1" />
 
+      {/* Cash */}
       <span className="text-gold text-xs font-mono">{formatMoney(cash)}</span>
     </div>
   )
