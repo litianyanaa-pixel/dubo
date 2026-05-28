@@ -1,21 +1,34 @@
+import { useEffect, useRef } from 'react'
 import { useNewsStore } from '@/stores/newsStore'
 import { formatTime } from '@/utils/format'
 
 export default function LeftPanel() {
   const entries = useNewsStore((s) => s.entries)
-  const recent = entries.slice(-30).reverse()
+  const listRef = useRef<HTMLDivElement>(null)
+  const prevCountRef = useRef(0)
+
+  // Auto-scroll to bottom when new entries arrive
+  useEffect(() => {
+    if (entries.length > prevCountRef.current && listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+    prevCountRef.current = entries.length
+  }, [entries.length])
 
   return (
     <div className="w-[280px] bg-bg-panel border-r border-border-panel p-3 flex flex-col">
       <h3 className="text-text-secondary text-xs uppercase tracking-wider mb-2">新闻 / 舆论流</h3>
-      <div className="flex-1 overflow-y-auto space-y-1.5">
-        {recent.length === 0 && (
-          <p className="text-text-muted text-xs">等待事件...</p>
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto space-y-1.5 scroll-smooth"
+      >
+        {entries.length === 0 && (
+          <p className="text-text-muted text-xs animate-pulse">等待事件...</p>
         )}
-        {recent.map((entry, i) => (
+        {entries.map((entry, i) => (
           <div
             key={`${entry.id}_${i}`}
-            className={`rounded px-2 py-1.5 text-xs border ${
+            className={`rounded px-2 py-1.5 text-xs border animate-[slideIn_0.3s_ease-out] ${
               entry.type === 'event'
                 ? 'bg-warn/5 border-warn/20'
                 : entry.type === 'ai_trade'
@@ -25,6 +38,7 @@ export default function LeftPanel() {
           >
             <div className="flex justify-between items-start gap-1">
               <span className={entry.type === 'event' ? 'text-warn' : 'text-text-primary'}>
+                {entry.type === 'event' ? '⚡ ' : entry.type === 'ai_trade' ? '📊 ' : '💰 '}
                 {entry.title}
               </span>
               <span className="text-text-muted whitespace-nowrap text-[10px]">
