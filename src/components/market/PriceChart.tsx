@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts'
+import { createChart, AreaSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts'
 import { useMarketStore } from '@/stores/marketStore'
 
 export default function PriceChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const seriesRef = useRef<ISeriesApi<'Area'> | null>(null)
+  const seriesRef = useRef<ISeriesApi<typeof AreaSeries> | null>(null)
   const prices = useMarketStore((s) => s.prices)
   const kalPrice = prices['KAL'] ?? 1
 
@@ -38,7 +38,7 @@ export default function PriceChart() {
       },
     })
 
-    const series = chart.addAreaSeries({
+    const series = chart.addSeries(AreaSeries, {
       lineColor: '#00ff88',
       topColor: 'rgba(0, 255, 136, 0.15)',
       bottomColor: 'rgba(0, 255, 136, 0.01)',
@@ -74,7 +74,7 @@ export default function PriceChart() {
 
     const lastPoint = history[history.length - 1]
     seriesRef.current.update({
-      time: Math.floor(lastPoint.time / 1000) as unknown as import('lightweight-charts').UTCTimestamp,
+      time: Math.floor(lastPoint.time / 1000) as never,
       value: lastPoint.price,
     })
   }, [kalPrice])
