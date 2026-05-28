@@ -4,11 +4,13 @@ import { MarketEngine } from '@/engine/market/MarketEngine'
 import { SentimentEngine } from '@/engine/sentiment/SentimentEngine'
 import { AIEngine } from '@/engine/ai/AIEngine'
 import { EventEngine } from '@/engine/event/EventEngine'
+import { KOLEngine } from '@/engine/kol/KOLEngine'
 import { eventBus } from '@/engine/core/EventBus'
 import { useGameStore } from '@/stores/gameStore'
 import { useMarketStore } from '@/stores/marketStore'
 import { useSentimentStore } from '@/stores/sentimentStore'
 import { useNewsStore } from '@/stores/newsStore'
+import { useKOLStore } from '@/stores/kolStore'
 import { ALL_ASSETS } from '@/data/assets'
 import type { TickLayer } from '@/engine/core/types'
 
@@ -21,6 +23,10 @@ export function useGameLoop() {
     const sentiment = new SentimentEngine()
     const ai = new AIEngine(20, 4, 2)
     const events = new EventEngine()
+    const kol = new KOLEngine()
+
+    // Initialize KOL store
+    useKOLStore.getState().setKOLs(kol.getKOLs())
 
     for (const asset of ALL_ASSETS) {
       market.registerAsset(asset)
@@ -41,8 +47,8 @@ export function useGameLoop() {
       sentiment.update()
     })
 
-    // L3 (5s): random events
-    loop.onLayer(3 as TickLayer, () => {
+    // L3 (5s): random events + KOL posts
+    loop.onLayer(3 as TickLayer, (tick) => {
       const event = events.tick()
       if (event) {
         useNewsStore.getState().addEntry({
@@ -52,20 +58,26 @@ export function useGameLoop() {
           type: 'event',
         })
 
-        // Apply event price impact
         if (event.targetAsset) {
           const asset = market.getAsset(event.targetAsset)
-          if (asset) {
-            asset.currentPrice *= (1 + event.priceImpact)
-          }
+          if (asset) asset.currentPrice *= (1 + event.priceImpact)
         } else {
           for (const asset of market.getAllAssets()) {
             asset.currentPrice *= (1 + event.priceImpact)
           }
         }
-
-        // Apply sentiment impact
         sentiment.applyShock(event.sentimentImpact)
+      }
+
+      // KOL posts
+      kol.tick(tick)
+      if (kol.lastKOLImpact) {
+        const { asset: kolAsset, sentimentImpact } = kol.lastKOLImpact
+        sentiment.applyShock(sentimentImpact)
+        kol.lastKOLImpact = null
+
+        // Sync KOL store
+        useKOLStore.getState().setKOLs(kol.getKOLs())
       }
     })
 
@@ -92,6 +104,15 @@ export function useGameLoop() {
           type: 'ai_trade',
         })
       }
+    })
+
+    eventBus.on('ai:kol:post', (data) => {
+      useNewsStore.getState().addEntry({
+        id: `kol_${Date.now()}`,
+        title: 'KOL 发帖',
+        description: data.content,
+        type: 'ai_trade',
+      })
     })
 
     const interval = setInterval(() => {

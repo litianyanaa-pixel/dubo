@@ -5,7 +5,7 @@ interface NewsEntry {
   title: string
   description: string
   time: number
-  type: 'event' | 'ai_trade' | 'player'
+  type: 'event' | 'ai_trade' | 'player' | 'fake_news'
 }
 
 interface NewsState {
