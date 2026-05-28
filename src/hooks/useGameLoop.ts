@@ -5,6 +5,7 @@ import { SentimentEngine } from '@/engine/sentiment/SentimentEngine'
 import { eventBus } from '@/engine/core/EventBus'
 import { useGameStore } from '@/stores/gameStore'
 import { useMarketStore } from '@/stores/marketStore'
+import { useSentimentStore } from '@/stores/sentimentStore'
 import { ASSET_KAL } from '@/data/assets'
 import type { TickLayer } from '@/engine/core/types'
 
@@ -32,6 +33,10 @@ export function useGameLoop() {
 
     eventBus.on('speed:changed', (data) => {
       useGameStore.getState().setSpeed(data.speed)
+    })
+
+    eventBus.on('sentiment:changed', (data) => {
+      useSentimentStore.getState().setGlobal(data.global)
     })
 
     const interval = setInterval(() => {
