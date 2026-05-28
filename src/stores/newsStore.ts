@@ -9,7 +9,6 @@ export interface NewsEntry {
   time: number
   type: FeedType
   icon?: string
-  // Trade-specific fields
   side?: 'buy' | 'sell'
   assetId?: string
   lots?: number
@@ -17,15 +16,44 @@ export interface NewsEntry {
   agentType?: 'leek' | 'whale' | 'scammer'
 }
 
+const FLUSH_INTERVAL = 300 // ms between each entry appearing
+
 interface NewsState {
   entries: NewsEntry[]
   addEntry: (entry: Omit<NewsEntry, 'time'>) => void
+  flushQueue: () => void
+}
+
+// Module-level queue: entries wait here before being shown
+const pending: Omit<NewsEntry, 'time'>[] = []
+let flushTimer: ReturnType<typeof setInterval> | null = null
+
+function startFlushTimer() {
+  if (flushTimer) return
+  flushTimer = setInterval(() => {
+    useNewsStore.getState().flushQueue()
+  }, FLUSH_INTERVAL)
 }
 
 export const useNewsStore = create<NewsState>((set, get) => ({
   entries: [],
+
   addEntry: (entry) => {
-    const entries = [...get().entries, { ...entry, time: Date.now() }]
+    pending.push(entry)
+    startFlushTimer()
+  },
+
+  flushQueue: () => {
+    if (pending.length === 0) {
+      // No more pending entries, stop the timer
+      if (flushTimer) {
+        clearInterval(flushTimer)
+        flushTimer = null
+      }
+      return
+    }
+    const next = pending.shift()!
+    const entries = [...get().entries, { ...next, time: Date.now() }]
     set({ entries: entries.slice(-200) })
   },
 }))
