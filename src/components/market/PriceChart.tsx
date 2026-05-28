@@ -1,16 +1,29 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts'
 import { useMarketStore } from '@/stores/marketStore'
+import { useSelectionStore } from '@/stores/selectionStore'
+import { ALL_ASSETS } from '@/data/assets'
 
 export default function PriceChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null)
+  const selectedAsset = useSelectionStore((s) => s.selectedAsset)
   const prices = useMarketStore((s) => s.prices)
-  const kalPrice = prices['KAL'] ?? 1
+  const currentPrice = prices[selectedAsset] ?? 1
 
+  // Rebuild chart when selected asset changes
   useEffect(() => {
     if (!containerRef.current) return
+
+    if (chartRef.current) {
+      chartRef.current.remove()
+      chartRef.current = null
+      seriesRef.current = null
+    }
+
+    const asset = ALL_ASSETS.find((a) => a.id === selectedAsset)
+    const precision = (asset?.basePrice ?? 1) >= 100 ? 2 : 4
 
     const chart = createChart(containerRef.current, {
       layout: {
@@ -46,8 +59,20 @@ export default function PriceChart() {
       borderDownColor: '#ff3366',
       wickUpColor: '#00ff88',
       wickDownColor: '#ff3366',
-      priceFormat: { type: 'price', precision: 4, minMove: 0.0001 },
+      priceFormat: { type: 'price', precision, minMove: 1 / Math.pow(10, precision) },
     })
+
+    // Load existing candle history
+    const candles = useMarketStore.getState().candles[selectedAsset]
+    if (candles && candles.length > 0) {
+      series.setData(candles.map((c) => ({
+        time: c.time as never,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      })))
+    }
 
     chartRef.current = chart
     seriesRef.current = series
@@ -64,15 +89,13 @@ export default function PriceChart() {
 
     return () => {
       window.removeEventListener('resize', handleResize)
-      chart.remove()
-      chartRef.current = null
-      seriesRef.current = null
     }
-  }, [])
+  }, [selectedAsset])
 
+  // Update with new candle data
   useEffect(() => {
     if (!seriesRef.current) return
-    const candles = useMarketStore.getState().candles['KAL']
+    const candles = useMarketStore.getState().candles[selectedAsset]
     if (!candles || candles.length === 0) return
 
     const last = candles[candles.length - 1]
@@ -83,7 +106,7 @@ export default function PriceChart() {
       low: last.low,
       close: last.close,
     })
-  }, [kalPrice])
+  }, [currentPrice, selectedAsset])
 
   return <div ref={containerRef} className="w-full h-full" />
 }

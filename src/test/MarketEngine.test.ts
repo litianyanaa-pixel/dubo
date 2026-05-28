@@ -30,7 +30,7 @@ describe('MarketEngine', () => {
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
 
-    engine.updatePrices(1)
+    engine.updatePrices(1, 50)
 
     expect(handler).toHaveBeenCalledTimes(1)
     const data = handler.mock.calls[0][0]
@@ -44,7 +44,7 @@ describe('MarketEngine', () => {
     engine.registerAsset(ASSET_KAL)
 
     for (let i = 0; i < 1000; i++) {
-      engine.updatePrices(i)
+      engine.updatePrices(i, 50)
     }
 
     const asset = engine.getAsset('KAL')
@@ -57,7 +57,7 @@ describe('MarketEngine', () => {
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
 
-    engine.updatePrices(1)
+    engine.updatePrices(1, 50)
 
     const data = handler.mock.calls[0][0]
     // Volatility is 0.0015, so max change per tick = ±0.003 (0.3%)
@@ -78,7 +78,7 @@ describe('MarketEngine', () => {
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
 
-    engine.updatePrices(1)
+    engine.updatePrices(1, 50)
 
     expect(handler).toHaveBeenCalledTimes(2)
   })

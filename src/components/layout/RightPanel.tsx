@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useMarketStore } from '@/stores/marketStore'
+import { useSelectionStore } from '@/stores/selectionStore'
 import { formatPrice, formatMoney } from '@/utils/format'
+import { ALL_ASSETS } from '@/data/assets'
 
 type TradeSide = 'buy' | 'sell'
 
@@ -12,25 +14,27 @@ export default function RightPanel() {
   const positions = usePlayerStore((s) => s.positions)
   const buy = usePlayerStore((s) => s.buy)
   const sell = usePlayerStore((s) => s.sell)
-  const kalPrice = useMarketStore((s) => s.prices['KAL'] ?? 1)
+  const selectedAsset = useSelectionStore((s) => s.selectedAsset)
+  const assetPrice = useMarketStore((s) => s.prices[selectedAsset] ?? 1)
+  const asset = ALL_ASSETS.find((a) => a.id === selectedAsset)
 
   const qty = parseFloat(quantity) || 0
-  const cost = qty * kalPrice
-  const kalPosition = positions['KAL']
+  const cost = qty * assetPrice
+  const position = positions[selectedAsset]
   const canBuy = side === 'buy' && qty > 0 && cost <= cash
-  const canSell = side === 'sell' && qty > 0 && kalPosition && kalPosition.amount >= qty
+  const canSell = side === 'sell' && qty > 0 && position && position.amount >= qty
 
   const handleTrade = () => {
     if (qty <= 0) return
     if (side === 'buy') {
-      buy('KAL', kalPrice, qty)
+      buy(selectedAsset, assetPrice, qty)
     } else {
-      sell('KAL', kalPrice, qty)
+      sell(selectedAsset, assetPrice, qty)
     }
   }
 
-  const pnl = kalPosition
-    ? (kalPrice - kalPosition.avgCost) * kalPosition.amount
+  const pnl = position
+    ? (assetPrice - position.avgCost) * position.amount
     : 0
 
   return (
@@ -43,23 +47,30 @@ export default function RightPanel() {
             <span className="text-text-muted">现金</span>
             <span className="text-text-primary">{formatMoney(cash)}</span>
           </div>
-          {kalPosition && (
-            <div className="flex justify-between">
-              <span className="text-text-muted">KAL 持仓</span>
-              <span className="text-text-primary">
-                {kalPosition.amount.toFixed(2)}
-                <span className={`ml-2 text-xs ${pnl >= 0 ? 'text-up' : 'text-down'}`}>
-                  {pnl >= 0 ? '+' : ''}{formatMoney(pnl)}
+          {Object.entries(positions).map(([id, pos]) => {
+            const a = ALL_ASSETS.find((x) => x.id === id)
+            const p = useMarketStore.getState().prices[id] ?? a?.basePrice ?? 0
+            const pl = (p - pos.avgCost) * pos.amount
+            return (
+              <div key={id} className="flex justify-between">
+                <span className="text-text-muted">{id}</span>
+                <span className="text-text-primary">
+                  {pos.amount.toFixed(2)}
+                  <span className={`ml-2 text-xs ${pl >= 0 ? 'text-up' : 'text-down'}`}>
+                    {pl >= 0 ? '+' : ''}{formatMoney(pl)}
+                  </span>
                 </span>
-              </span>
-            </div>
-          )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
       {/* Trade Panel */}
       <div>
-        <h3 className="text-text-secondary text-xs uppercase tracking-wider mb-2">交易 KAL</h3>
+        <h3 className="text-text-secondary text-xs uppercase tracking-wider mb-2">
+          交易 {asset?.name ?? selectedAsset}
+        </h3>
 
         <div className="flex gap-1 mb-2">
           <button
@@ -87,7 +98,7 @@ export default function RightPanel() {
         <div className="space-y-2">
           <div>
             <label className="text-text-muted text-xs">当前价格</label>
-            <div className="text-text-primary font-mono">{formatPrice(kalPrice)}</div>
+            <div className="text-text-primary font-mono">{formatPrice(assetPrice, (asset?.basePrice ?? 1) >= 100 ? 2 : 4)}</div>
           </div>
 
           <div>
@@ -120,7 +131,7 @@ export default function RightPanel() {
                   : 'bg-bg-primary text-text-muted border border-border-panel cursor-not-allowed'
             }`}
           >
-            {side === 'buy' ? '买入 KAL' : '卖出 KAL'}
+            {side === 'buy' ? `买入 ${selectedAsset}` : `卖出 ${selectedAsset}`}
           </button>
         </div>
       </div>
