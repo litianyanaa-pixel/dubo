@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MarketEngine } from '@/engine/market/MarketEngine'
-import { ASSET_KAL } from '@/data/assets'
+import { ALL_ASSETS } from '@/data/assets'
 import { eventBus } from '@/engine/core/EventBus'
+
+const KAL_ASSET = ALL_ASSETS.find(a => a.id === 'KAL')!
 
 describe('MarketEngine', () => {
   let engine: MarketEngine
@@ -12,7 +14,7 @@ describe('MarketEngine', () => {
   })
 
   it('registers and retrieves assets', () => {
-    engine.registerAsset(ASSET_KAL)
+    engine.registerAsset(KAL_ASSET)
     const asset = engine.getAsset('KAL')
 
     expect(asset).toBeDefined()
@@ -25,12 +27,12 @@ describe('MarketEngine', () => {
   })
 
   it('updatePrices emits price:updated events', () => {
-    engine.registerAsset(ASSET_KAL)
+    engine.registerAsset(KAL_ASSET)
 
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
 
-    engine.updatePrices(1, 50)
+    engine.updatePrices(1, { global: 50 })
 
     expect(handler).toHaveBeenCalledTimes(1)
     const data = handler.mock.calls[0][0]
@@ -41,10 +43,10 @@ describe('MarketEngine', () => {
   })
 
   it('price stays positive after many updates', () => {
-    engine.registerAsset(ASSET_KAL)
+    engine.registerAsset(KAL_ASSET)
 
     for (let i = 0; i < 1000; i++) {
-      engine.updatePrices(i, 50)
+      engine.updatePrices(i, { global: 50 })
     }
 
     const asset = engine.getAsset('KAL')
@@ -52,12 +54,12 @@ describe('MarketEngine', () => {
   })
 
   it('price changes are within expected volatility range', () => {
-    engine.registerAsset(ASSET_KAL)
+    engine.registerAsset(KAL_ASSET)
 
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
 
-    engine.updatePrices(1, 50)
+    engine.updatePrices(1, { global: 50 })
 
     const data = handler.mock.calls[0][0]
     // Volatility is 0.0015, so max change per tick = ±0.003 (0.3%)
@@ -65,7 +67,7 @@ describe('MarketEngine', () => {
   })
 
   it('handles multiple assets', () => {
-    engine.registerAsset(ASSET_KAL)
+    engine.registerAsset(KAL_ASSET)
     engine.registerAsset({
       id: 'TEST',
       name: 'Test Coin',
@@ -73,12 +75,13 @@ describe('MarketEngine', () => {
       basePrice: 100,
       currentPrice: 100,
       volatility: 0.002,
+      sentimentSensitivity: 1.0,
     })
 
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
 
-    engine.updatePrices(1, 50)
+    engine.updatePrices(1, { global: 50 })
 
     expect(handler).toHaveBeenCalledTimes(2)
   })

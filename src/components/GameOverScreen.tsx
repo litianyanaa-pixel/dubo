@@ -1,0 +1,129 @@
+import { useGameStore } from '@/stores/gameStore'
+import { usePlayerStore } from '@/stores/playerStore'
+import { useMarketStore } from '@/stores/marketStore'
+import { useUnlockStore } from '@/stores/unlockStore'
+import { formatMoney, formatPercent } from '@/utils/format'
+import { SFX } from '@/utils/sound'
+
+export default function GameOverScreen() {
+  const character = useGameStore((s) => s.character)
+  const startCash = useGameStore((s) => s.startCash)
+  const elapsed = useGameStore((s) => s.elapsed)
+  const setPhase = useGameStore((s) => s.setPhase)
+  const cash = usePlayerStore((s) => s.cash)
+  const totalTrades = usePlayerStore((s) => s.totalTrades)
+  const positions = usePlayerStore((s) => s.positions)
+  const shorts = usePlayerStore((s) => s.shorts)
+  const prices = useMarketStore((s) => s.prices)
+
+  const longValue = Object.entries(positions).reduce((sum, [id, pos]) => {
+    return sum + pos.amount * (prices[id] ?? 0)
+  }, 0)
+  const shortPnl = Object.entries(shorts).reduce((sum, [id, pos]) => {
+    const price = prices[id] ?? pos.avgEntry
+    return sum + pos.amount * pos.avgEntry + (pos.avgEntry - price) * pos.amount
+  }, 0)
+
+  const totalValue = cash + longValue + shortPnl
+  const totalPnl = totalValue - startCash
+  const pnlPct = startCash > 0 ? totalPnl / startCash : 0
+  const isBankrupt = totalValue <= 0
+
+  // Performance rank
+  const rank = (() => {
+    const pct = pnlPct * 100
+    if (isBankrupt) return { title: '💀 彻底破产', desc: '金融市场又多了一具尸体', color: 'text-down' }
+    if (pct >= 500) return { title: '🐉 金融巨鳄', desc: '华尔街看到你都要绕道走', color: 'text-gold' }
+    if (pct >= 200) return { title: '🐋 市场巨鲸', desc: '你的每一笔交易都能掀起波澜', color: 'text-up' }
+    if (pct >= 100) return { title: '🏆 操盘高手', desc: '稳定盈利，值得尊敬', color: 'text-up' }
+    if (pct >= 50) return { title: '📈 小有所成', desc: '有天赋，但还需要磨练', color: 'text-warn' }
+    if (pct >= 0) return { title: '😐 勉强保本', desc: '至少没亏...对吧？', color: 'text-text-secondary' }
+    if (pct >= -50) return { title: '📉 小亏出场', desc: '市场不是每个人都能赢的', color: 'text-down' }
+    if (pct >= -80) return { title: '🩸 大出血', desc: '也许该考虑找个正经工作了', color: 'text-down' }
+    return { title: '☠️ 灰飞烟灭', desc: '你的资产几乎归零', color: 'text-danger' }
+  })()
+
+  const gameDays = Math.floor(elapsed / 60000) + 1
+  const gameMinutes = Math.floor(elapsed / 1000 / 60)
+  const gameSeconds = Math.floor(elapsed / 1000) % 60
+
+  // Record PnL for unlock tracking
+  // Record PnL for unlock tracking + play sound
+  SFX.settlement()
+  useUnlockStore.getState().recordPnlPercent(pnlPct)
+
+  const handleRestart = () => {
+    usePlayerStore.setState({ cash: 100000, positions: {}, shorts: {}, totalTrades: 0 })
+    useGameStore.setState({ phase: 'menu', character: null, elapsed: 0, speed: 1, showHelp: false, mode: 'standard' })
+  }
+
+  return (
+    <div className="h-screen w-screen bg-bg-primary flex flex-col items-center justify-center p-8">
+      <div className="text-center mb-8">
+        <h1 className={`text-4xl font-display font-bold mb-2 ${isBankrupt ? 'text-down' : 'text-up'}`}>
+          {isBankrupt ? '破产清算' : '结算离场'}
+        </h1>
+        <p className="text-text-secondary text-sm">
+          {isBankrupt ? '你的资产已归零，游戏结束' : `Day ${gameDays} · 游戏时长 ${gameMinutes}:${gameSeconds.toString().padStart(2, '0')}`}
+        </p>
+        <div className={`mt-3 text-xl font-display font-bold ${rank.color}`}>
+          {rank.title}
+        </div>
+        <p className="text-text-muted text-xs mt-1">{rank.desc}</p>
+      </div>
+
+      <div className="bg-bg-panel rounded-lg border border-border-panel p-6 w-80 space-y-3">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-2xl">{character?.icon}</span>
+          <span className="text-text-primary font-bold">{character?.name}</span>
+        </div>
+
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-text-muted">初始资金</span>
+            <span className="text-text-secondary font-mono">{formatMoney(startCash)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-text-muted">现金余额</span>
+            <span className="text-gold font-mono">{formatMoney(cash)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-text-muted">持仓市值</span>
+            <span className="text-text-secondary font-mono">{formatMoney(longValue + shortPnl)}</span>
+          </div>
+
+          <div className="border-t border-border-panel pt-2">
+            <div className="flex justify-between">
+              <span className="text-text-muted">总资产</span>
+              <span className="text-text-primary font-mono font-bold">{formatMoney(totalValue)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-muted">盈亏</span>
+              <span className={`font-mono font-bold ${totalPnl >= 0 ? 'text-up' : 'text-down'}`}>
+                {totalPnl >= 0 ? '+' : ''}{formatMoney(totalPnl)} ({formatPercent(pnlPct)})
+              </span>
+            </div>
+          </div>
+
+          <div className="border-t border-border-panel pt-2">
+            <div className="flex justify-between">
+              <span className="text-text-muted">交易次数</span>
+              <span className="text-text-secondary font-mono">{totalTrades}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-muted">游戏天数</span>
+              <span className="text-text-secondary font-mono">{gameDays}天</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={handleRestart}
+        className="mt-6 px-8 py-3 rounded-lg font-display font-bold text-lg bg-up/20 text-up border-2 border-up/40 hover:bg-up/30 hover:scale-105 transition-all"
+      >
+        重新开始
+      </button>
+    </div>
+  )
+}

@@ -19,3 +19,8 @@ export function formatTime(ms: number): string {
   const sec = totalSec % 60
   return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
 }
+
+export function formatClockTime(timestamp: number): string {
+  const d = new Date(timestamp)
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`
+}

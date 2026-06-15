@@ -7,7 +7,7 @@ export interface EventMap {
   'game:tick': { tick: number; elapsed: number; layer: number }
   'game:end': { reason: string }
   'price:updated': { assetId: string; price: number; prevPrice: number; change: number }
-  'sentiment:changed': { global: number }
+  'sentiment:changed': { global: number; countries?: Record<string, number>; assets?: Record<string, number> }
   'speed:changed': { speed: number }
   // Phase 2 events
   'ai:trade': { agentId: string; assetId: string; side: 'buy' | 'sell'; amount: number }

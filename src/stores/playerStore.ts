@@ -103,7 +103,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const existing = state.shorts[assetId]
     if (!existing || existing.amount < qty) return false
 
-    // PnL: positive when covered below entry price
+    // Return margin + PnL
+    const marginReturn = existing.avgEntry * qty
     const pnl = (existing.avgEntry - price) * qty
     const remaining = existing.amount - qty
     const newShorts = { ...state.shorts }
@@ -111,7 +112,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     else newShorts[assetId] = { ...existing, amount: remaining }
 
     set({
-      cash: state.cash + pnl,
+      cash: state.cash + marginReturn + pnl,
       shorts: newShorts,
       totalTrades: state.totalTrades + 1,
     })

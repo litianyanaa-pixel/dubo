@@ -24,6 +24,7 @@ export class GameLoop {
   }
 
   setSpeed(speed: SpeedMultiplier): void {
+    if (this.speed === speed) return
     const prev = this.speed
     this.speed = speed
     if (prev === 0 && speed > 0) {

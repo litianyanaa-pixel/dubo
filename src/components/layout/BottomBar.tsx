@@ -1,73 +1,88 @@
 import { useMarketStore } from '@/stores/marketStore'
-import { useKOLStore } from '@/stores/kolStore'
 import { usePlayerStore } from '@/stores/playerStore'
-import { formatPercent, formatMoney } from '@/utils/format'
+import { useCountryStore } from '@/stores/countryStore'
+import { formatPercent, formatMoney, formatPrice } from '@/utils/format'
 import { ALL_ASSETS } from '@/data/assets'
+import { INITIAL_COUNTRIES } from '@/data/countries'
 
 export default function BottomBar() {
   const prices = useMarketStore((s) => s.prices)
   const prevPrices = useMarketStore((s) => s.prevPrices)
-  const kols = useKOLStore((s) => s.kols)
-  const updateKOL = useKOLStore((s) => s.updateKOL)
   const cash = usePlayerStore((s) => s.cash)
+  const positions = usePlayerStore((s) => s.positions)
+  const shorts = usePlayerStore((s) => s.shorts)
+  const countryData = useCountryStore((s) => s.countries)
+  const wars = useCountryStore((s) => s.activeWars)
 
-  const handleHire = (kol: typeof kols[0]) => {
-    if (cash < kol.hireCost || kol.hired) return
-    usePlayerStore.getState().buy('COST', kol.hireCost, 1)
-    updateKOL(kol.id, { hired: true })
-  }
+  const heldAssets = new Set([...Object.keys(positions), ...Object.keys(shorts)])
+
+  // 货币概览（每国一行）
+  const currencyAssets = ALL_ASSETS.filter(a => a.type === 'currency')
 
   return (
-    <div className="h-[100px] flex border-t border-border-panel bg-bg-panel">
-      {/* Asset overview */}
-      <div className="flex-1 p-2 border-r border-border-panel overflow-y-auto">
-        <h4 className="text-text-secondary text-xs uppercase tracking-wider mb-1">资产概览</h4>
+    <div className="h-[80px] flex border-t border-border-panel bg-bg-panel">
+      {/* 货币概览 */}
+      <div className="flex-1 p-2 overflow-y-auto">
+        <h4 className="text-text-secondary text-xs uppercase tracking-wider mb-1">
+          🌍 全球货币 {wars.length > 0 && <span className="text-down ml-2">⚠ {wars.length}场战争</span>}
+        </h4>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-          {ALL_ASSETS.map((asset) => {
+          {currencyAssets.map((asset) => {
             const price = prices[asset.id] ?? asset.basePrice
             const prev = prevPrices[asset.id] ?? asset.basePrice
             const change = prev !== 0 ? (price - prev) / prev : 0
+            const country = INITIAL_COUNTRIES.find(c => c.currencyId === asset.id)
             return (
               <span key={asset.id} className={`text-xs ${change >= 0 ? 'text-up' : 'text-down'}`}>
-                {asset.id} {change >= 0 ? '▲' : '▼'} {formatPercent(change)}
+                {asset.id}({country?.name?.slice(0, 2) ?? ''}) {change >= 0 ? '▲' : '▼'} {formatPercent(change)}
               </span>
             )
           })}
         </div>
       </div>
 
-      {/* KOL hire panel */}
-      <div className="w-[320px] p-2 border-r border-border-panel overflow-y-auto">
-        <h4 className="text-text-secondary text-xs uppercase tracking-wider mb-1">KOL 雇佣</h4>
-        <div className="flex gap-1.5">
-          {kols.map((kol) => (
-            <button
-              key={kol.id}
-              onClick={() => handleHire(kol)}
-              disabled={kol.hired || cash < kol.hireCost}
-              className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${
-                kol.hired
-                  ? 'bg-up/10 border border-up/20 text-up'
-                  : cash >= kol.hireCost
-                    ? 'bg-bg-primary border border-border-panel text-text-secondary hover:border-warn/30'
-                    : 'bg-bg-primary border border-border-panel text-text-muted cursor-not-allowed'
-              }`}
-            >
-              {kol.hired ? '✓ ' : ''}{kol.name}
-              {!kol.hired && <span className="text-gold ml-1">{formatMoney(kol.hireCost)}</span>}
-            </button>
-          ))}
-        </div>
+      {/* 持仓 */}
+      <div className="w-[320px] p-2 border-l border-border-panel overflow-y-auto">
+        <h4 className="text-text-secondary text-xs uppercase tracking-wider mb-1">持仓</h4>
+        {heldAssets.size === 0 ? (
+          <p className="text-text-muted text-xs">空仓</p>
+        ) : (
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+            {ALL_ASSETS.filter((a) => heldAssets.has(a.id)).map((asset) => {
+              const price = prices[asset.id] ?? 0
+              const longPos = positions[asset.id]
+              const shortPos = shorts[asset.id]
+              return (
+                <span key={asset.id} className="text-xs">
+                  <span className="text-text-muted">{asset.id}</span>
+                  {longPos && (
+                    <span className="text-up ml-0.5">
+                      多{longPos.amount.toFixed(0)}
+                      <span className={`ml-0.5 ${(price - longPos.avgCost) >= 0 ? 'text-up' : 'text-down'}`}>
+                        {(price - longPos.avgCost) >= 0 ? '+' : ''}{formatMoney((price - longPos.avgCost) * longPos.amount)}
+                      </span>
+                    </span>
+                  )}
+                  {shortPos && (
+                    <span className="text-down ml-0.5">
+                      空{shortPos.amount.toFixed(0)}
+                      <span className={`${(shortPos.avgEntry - price) >= 0 ? 'text-up' : 'text-down'} ml-0.5`}>
+                        {(shortPos.avgEntry - price) >= 0 ? '+' : ''}{formatMoney((shortPos.avgEntry - price) * shortPos.amount)}
+                      </span>
+                    </span>
+                  )}
+                </span>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Status */}
-      <div className="w-[140px] p-2">
+      {/* 系统状态 */}
+      <div className="w-[120px] p-2 border-l border-border-panel">
         <h4 className="text-text-secondary text-xs uppercase tracking-wider">系统</h4>
         <p className="text-up text-xs mt-1">● 运行中</p>
-        <p className="text-text-muted text-xs">AI 活跃 | 事件就绪</p>
-        <p className="text-text-muted text-xs">
-          KOL: {kols.filter((k) => k.hired).length}/{kols.length}
-        </p>
+        <p className="text-gold text-xs font-mono">{formatMoney(cash)}</p>
       </div>
     </div>
   )

@@ -1,16 +1,19 @@
 import { useEffect, useRef } from 'react'
-import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts'
+import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi, type IPriceLine } from 'lightweight-charts'
 import { useMarketStore } from '@/stores/marketStore'
 import { useSelectionStore } from '@/stores/selectionStore'
+import { usePlayerStore } from '@/stores/playerStore'
 import { ALL_ASSETS } from '@/data/assets'
 
 export default function PriceChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null)
+  const priceLinesRef = useRef<IPriceLine[]>([])
   const selectedAsset = useSelectionStore((s) => s.selectedAsset)
-  const prices = useMarketStore((s) => s.prices)
-  const currentPrice = prices[selectedAsset] ?? 1
+  const currentPrice = useMarketStore((s) => s.prices[selectedAsset]) ?? 1
+  const longPos = usePlayerStore((s) => s.positions[selectedAsset])
+  const shortPos = usePlayerStore((s) => s.shorts[selectedAsset])
 
   // Rebuild chart when selected asset changes
   useEffect(() => {
@@ -20,6 +23,7 @@ export default function PriceChart() {
       chartRef.current.remove()
       chartRef.current = null
       seriesRef.current = null
+      priceLinesRef.current = []
     }
 
     const asset = ALL_ASSETS.find((a) => a.id === selectedAsset)
@@ -91,6 +95,42 @@ export default function PriceChart() {
       window.removeEventListener('resize', handleResize)
     }
   }, [selectedAsset])
+
+  // Update price lines for positions
+  useEffect(() => {
+    const series = seriesRef.current
+    if (!series) return
+
+    // Remove old price lines
+    for (const line of priceLinesRef.current) {
+      try { series.removePriceLine(line) } catch {}
+    }
+    priceLinesRef.current = []
+
+    if (longPos) {
+      const line = series.createPriceLine({
+        price: longPos.avgCost,
+        color: '#00ff88',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: `多 ${longPos.amount.toFixed(1)}`,
+      })
+      priceLinesRef.current.push(line)
+    }
+
+    if (shortPos) {
+      const line = series.createPriceLine({
+        price: shortPos.avgEntry,
+        color: '#ff3366',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: `空 ${shortPos.amount.toFixed(1)}`,
+      })
+      priceLinesRef.current.push(line)
+    }
+  }, [selectedAsset, longPos, shortPos])
 
   // Update with new candle data
   useEffect(() => {

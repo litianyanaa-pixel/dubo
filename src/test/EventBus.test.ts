@@ -11,14 +11,14 @@ describe('EventBus', () => {
     eventBus.on('price:updated', handler)
 
     eventBus.emit('price:updated', {
-      assetId: 'KAL',
+      assetId: 'USD',
       price: 1.05,
       prevPrice: 1.0,
       change: 0.05,
     })
 
     expect(handler).toHaveBeenCalledWith({
-      assetId: 'KAL',
+      assetId: 'USD',
       price: 1.05,
       prevPrice: 1.0,
       change: 0.05,
@@ -30,7 +30,7 @@ describe('EventBus', () => {
     const unsub = eventBus.on('price:updated', handler)
 
     unsub()
-    eventBus.emit('price:updated', { assetId: 'KAL', price: 1.0, prevPrice: 1.0, change: 0 })
+    eventBus.emit('price:updated', { assetId: 'USD', price: 1.0, prevPrice: 1.0, change: 0 })
 
     expect(handler).not.toHaveBeenCalled()
   })
@@ -41,7 +41,7 @@ describe('EventBus', () => {
     eventBus.on('price:updated', h1)
     eventBus.on('price:updated', h2)
 
-    eventBus.emit('price:updated', { assetId: 'KAL', price: 1.0, prevPrice: 1.0, change: 0 })
+    eventBus.emit('price:updated', { assetId: 'USD', price: 1.0, prevPrice: 1.0, change: 0 })
 
     expect(h1).toHaveBeenCalledTimes(1)
     expect(h2).toHaveBeenCalledTimes(1)
@@ -70,7 +70,7 @@ describe('EventBus', () => {
 
     eventBus.removeAll()
 
-    eventBus.emit('price:updated', { assetId: 'KAL', price: 1, prevPrice: 1, change: 0 })
+    eventBus.emit('price:updated', { assetId: 'USD', price: 1, prevPrice: 1, change: 0 })
     eventBus.emit('sentiment:changed', { global: 50 })
 
     expect(h1).not.toHaveBeenCalled()
