@@ -32,10 +32,10 @@ export default function StartScreen({ onStart }: Props) {
   }
 
   return (
-    <div className="h-screen w-screen bg-bg-primary flex flex-col items-center justify-center p-8 overflow-hidden">
+    <div className="h-screen w-screen bg-bg-primary flex flex-col items-center justify-center p-8 overflow-hidden animate-fade-in">
       {/* Title */}
-      <div className="text-center mb-8">
-        <h1 className="text-5xl font-display font-bold text-up mb-2">运筹帷幄</h1>
+      <div className="text-center mb-8 animate-reveal">
+        <h1 className="text-5xl font-display font-bold text-up mb-2 animate-title-glow">运筹帷幄</h1>
         <p className="text-text-secondary text-sm">全球金融市场操控模拟器</p>
         <p className="text-text-muted text-xs mt-1">操控舆论 · 制造恐慌 · 在崩盘中获利</p>
       </div>
@@ -74,8 +74,8 @@ export default function StartScreen({ onStart }: Props) {
                 isLocked
                   ? 'bg-bg-panel/30 border-border-panel cursor-not-allowed opacity-50'
                   : isSelected
-                    ? 'bg-up/10 border-up/40 scale-[1.02] shadow-lg shadow-up/10'
-                    : 'bg-bg-panel border-border-panel hover:border-border-highlight hover:bg-bg-panel-hover'
+                    ? 'bg-up/10 border-up/40 scale-[1.03] shadow-lg shadow-up/20 animate-pulse'
+                    : 'bg-bg-panel border-border-panel hover:border-border-highlight hover:bg-bg-panel-hover hover:-translate-y-0.5 hover:shadow-md hover:shadow-up/5'
               }`}
             >
               <div className="flex items-center gap-2 mb-1.5">
@@ -118,13 +118,20 @@ export default function StartScreen({ onStart }: Props) {
           if (char) onStart(char)
         }}
         disabled={!selected}
-        className={`px-12 py-3 rounded-lg font-display font-bold text-lg transition-all ${
+        className={`relative overflow-hidden px-12 py-3 rounded-lg font-display font-bold text-lg transition-all ${
           selected
             ? 'bg-up/20 text-up border-2 border-up/40 hover:bg-up/30 hover:scale-105 shadow-lg shadow-up/20'
             : 'bg-bg-panel text-text-muted border-2 border-border-panel cursor-not-allowed'
         }`}
       >
-        {selected ? '开始操纵' : '选择角色'}
+        {selected && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-up/30 to-transparent"
+            style={{ animation: 'sheen 2.5s ease-in-out infinite' }}
+          />
+        )}
+        <span className="relative">{selected ? '开始操纵' : '选择角色'}</span>
       </button>
     </div>
   )

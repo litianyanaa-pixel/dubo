@@ -31,7 +31,7 @@ export const CHARACTERS: Character[] = [
     description: '社交媒体操纵大师，50,000铁粉随时待命。一句话就能让市场翻天。',
     cash: 200_000,
     startRegion: '英国',
-    trait: '舆论操控：假新闻效果+70%，KOL影响力x2',
+    trait: '舆论操控：假新闻效果+70%，KOL影响力×1.5',
     riskLabel: '高风险',
     icon: '👑',
     unlocked: true,

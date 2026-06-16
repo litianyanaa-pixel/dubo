@@ -2,6 +2,7 @@ import { eventBus } from '@/engine/core/EventBus'
 import type { Character } from '@/data/characters'
 import { useNewsStore } from '@/stores/newsStore'
 import type { Candle } from '@/stores/marketStore'
+import { ALL_ASSETS } from '@/data/assets'
 
 const INSIDER_NEWS = [
   '【内幕】据可靠线人透露，{asset}即将迎来重大利好政策',
@@ -165,8 +166,18 @@ export class TraitEngine {
     return this.character?.id === 'lin' && this.predictionCooldown <= 0
   }
 
+  /** 剩余预测冷却(L3 tick 数,每 tick=5s) */
+  getPredictionCooldown(): number {
+    return this.predictionCooldown
+  }
+
+  /** 猎犬·陈:距离下一条内幕消息的剩余 tick 数 */
+  getInsiderCountdown(): number {
+    return Math.max(0, this.insiderInterval - this.insiderTimer)
+  }
+
   private emitInsiderNews(): void {
-    const assets = ['USD', 'EUR', 'GBP', 'CHF', 'OIL', 'GOLD']
+    const assets = ALL_ASSETS.map((a) => a.id)
     const asset = assets[Math.floor(Math.random() * assets.length)]
     const template = INSIDER_NEWS[Math.floor(Math.random() * INSIDER_NEWS.length)]
     const content = template.replace('{asset}', asset)

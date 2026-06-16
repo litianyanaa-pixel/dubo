@@ -17,42 +17,172 @@
   --color-text-primary: #e0e0e0;
   --color-text-secondary: #888899;
   --color-text-muted: #555566;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --font-display: 'Orbitron', 'Rajdhani', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Noto Sans SC', monospace;
+  --font-display: 'Orbitron', 'Rajdhani', 'Noto Sans SC', sans-serif;
+  --font-sans: 'Noto Sans SC', 'Rajdhani', sans-serif;
 }
 
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  /* 交易终端暗角 + 极淡网格纹理 */
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(0, 187, 255, 0.04), transparent 60%),
+    radial-gradient(ellipse at 50% 100%, rgba(191, 90, 242, 0.03), transparent 60%),
+    linear-gradient(rgba(30, 30, 46, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 30, 46, 0.18) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  background-attachment: fixed;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border-panel) transparent;
+  scrollbar-color: var(--color-border-highlight) transparent;
 }
 
+/* WebKit 滚动条 */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border-highlight);
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ========== 工具类 ========== */
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); }
+
+/* ========== 关键帧动画 ========== */
+
+/* 涨/跌全屏边缘渐变闪 */
+@keyframes flash-up {
+  0%   { box-shadow: inset 0 0 0 0 transparent; }
+  15%  { box-shadow: inset 0 0 120px 0 rgba(0, 255, 136, 0.28); }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+@keyframes flash-down {
+  0%   { box-shadow: inset 0 0 0 0 transparent; }
+  15%  { box-shadow: inset 0 0 120px 0 rgba(255, 51, 102, 0.30); }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+.animate-flash-up { animation: flash-up 0.8s ease-out; }
+.animate-flash-down { animation: flash-down 0.8s ease-out; }
+
+/* 震屏 */
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-3px, 1px); }
+  20% { transform: translate(3px, -2px); }
+  30% { transform: translate(-4px, 2px); }
+  40% { transform: translate(4px, -1px); }
+  50% { transform: translate(-3px, 2px); }
+  60% { transform: translate(3px, -2px); }
+  70% { transform: translate(-2px, 1px); }
+  80% { transform: translate(2px, -1px); }
+  90% { transform: translate(-1px, 1px); }
+}
+.animate-shake { animation: shake 0.5s ease-in-out; }
+
+/* 金色脉冲(段位/成就) */
+@keyframes pulse-gold {
+  0%, 100% { text-shadow: 0 0 8px rgba(255, 215, 0, 0.5); }
+  50%      { text-shadow: 0 0 24px rgba(255, 215, 0, 0.9), 0 0 4px rgba(255, 215, 0, 0.6); }
+}
+.animate-pulse-gold { animation: pulse-gold 2s ease-in-out infinite; }
+
+/* 扫描线(从上往下) */
+@keyframes scan-down {
+  0%   { top: -20%; opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { top: 120%; opacity: 0; }
+}
+
+/* 滚动跑马灯 */
+@keyframes ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-ticker { animation: ticker 30s linear infinite; }
+
+/* 滑入(顶部条目) */
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.animate-slide-in { animation: slideIn 0.3s ease-out; }
 
+/* 淡入 */
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
+}
+.animate-fade-in { animation: fadeIn 0.4s ease-out; }
+
+/* 从下浮入揭幕 */
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-reveal { animation: reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* 数字滚入(配合 CountUp 组件,初始缩放) */
+@keyframes count-pop {
+  0%   { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-count-pop { animation: count-pop 0.4s ease-out; }
+
+/* 标题辉光呼吸 */
+@keyframes title-glow {
+  0%, 100% { text-shadow: 0 0 12px rgba(255, 215, 0, 0.35), 0 0 40px rgba(255, 215, 0, 0.1); }
+  50%      { text-shadow: 0 0 20px rgba(255, 215, 0, 0.7), 0 0 60px rgba(255, 215, 0, 0.25); }
+}
+.animate-title-glow { animation: title-glow 3s ease-in-out infinite; }
+
+/* 逐字浮现 */
+@keyframes char-rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
+/* 按钮扫光 */
+@keyframes sheen {
+  0%   { transform: translateX(-150%) skewX(-20deg); }
+  100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+/* 背景数字雨漂移 */
+@keyframes grid-drift {
+  from { background-position: 0 0, 0 0, 0 0, 0 0; }
+  to   { background-position: 0 0, 0 0, 0 400px, 400px 0; }
+}
+.animate-grid-drift { animation: grid-drift 30s linear infinite; }
+
+/* 价格变化微闪 */
+@keyframes price-flash-up {
+  0%   { background-color: rgba(0, 255, 136, 0.35); }
+  100% { background-color: transparent; }
+}
+@keyframes price-flash-down {
+  0%   { background-color: rgba(255, 51, 102, 0.35); }
+  100% { background-color: transparent; }
+}
+.animate-price-up { animation: price-flash-up 0.4s ease-out; }
+.animate-price-down { animation: price-flash-down 0.4s ease-out; }
+
+/* Toast */
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-
-.animate-toast-in {
-  animation: toast-in 0.3s ease-out;
-}
+.animate-toast-in { animation: toast-in 0.3s ease-out; }

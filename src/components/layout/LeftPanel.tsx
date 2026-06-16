@@ -11,7 +11,7 @@ import { useSelectionStore } from '@/stores/selectionStore'
 import { formatClockTime, formatMoney } from '@/utils/format'
 import { getEngineRefs } from '@/hooks/useGameLoop'
 import { NEWS_TEMPLATES } from '@/engine/news/NewsEngine'
-import { ALL_ASSETS } from '@/data/assets'
+import { ALL_ASSETS, ASSET_CATEGORIES } from '@/data/assets'
 import { eventBus } from '@/engine/core/EventBus'
 
 type Tab = 'news' | 'trades' | 'social' | 'create' | 'rug'
@@ -25,6 +25,14 @@ const TABS: { key: Tab; label: string }[] = [
 ]
 
 const AGENT_ICONS: Record<string, string> = { leek: '🥬', whale: '🐋', scammer: '🎭' }
+
+const CATEGORY_ICON: Record<string, string> = {
+  currency: '💱',
+  stock: '📈',
+  commodity: '🛢',
+  crypto: '🪙',
+  safehaven: '🛡',
+}
 
 export default function LeftPanel() {
   const [tab, setTab] = useState<Tab>('news')
@@ -82,7 +90,7 @@ export default function LeftPanel() {
           {reversed.map((entry, i) => (
             <div
               key={`${entry.id}_${i}`}
-              className={`rounded px-2 py-1.5 text-xs border ${
+              className={`rounded px-2 py-1.5 text-xs border animate-slide-in ${
                 entry.type === 'event' ? 'bg-warn/5 border-warn/20'
                 : entry.type === 'fake_news' ? 'bg-danger/5 border-danger/20'
                 : entry.type === 'kol_post' ? 'bg-crypto/5 border-crypto/20'
@@ -163,7 +171,7 @@ const TradeFeed = ({ entries, selectedAsset }: { entries: NewsEntry[]; selectedA
 // --- Create tab (fake news) ---
 function CreateTab() {
   const [selectedTemplate, setSelectedTemplate] = useState(0)
-  const [targetAsset, setTargetAsset] = useState('USD')
+  const [targetAsset, setTargetAsset] = useState('KAL')
   const [published, setPublished] = useState(false)
   const cash = usePlayerStore((s) => s.cash)
   const addEntry = useNewsStore((s) => s.addEntry)
@@ -233,12 +241,33 @@ function CreateTab() {
 
       <div>
         <label className="text-text-muted text-xs">目标资产</label>
-        <div className="flex flex-wrap gap-1 mt-1">
-          {ALL_ASSETS.map((a) => (
-            <button key={a.id} onClick={() => setTargetAsset(a.id)}
-              className={`px-1.5 py-0.5 rounded text-[10px] ${targetAsset === a.id ? 'bg-warn/20 text-warn border border-warn/30' : 'bg-bg-primary text-text-secondary'}`}
-            >{a.id}</button>
-          ))}
+        <div className="mt-1 max-h-44 overflow-y-auto space-y-1.5 pr-0.5">
+          {ASSET_CATEGORIES.map((cat) => {
+            const groupAssets = ALL_ASSETS.filter((a) => a.type === cat.key)
+            if (groupAssets.length === 0) return null
+            return (
+              <div key={cat.key}>
+                <div className="flex items-center gap-1 mb-0.5 pb-0.5 border-b border-border-panel">
+                  <span className="text-[10px]">{CATEGORY_ICON[cat.key]}</span>
+                  <span className="text-text-muted text-[10px] font-bold tracking-wide">{cat.label}</span>
+                  <span className="text-text-muted text-[9px]">({groupAssets.length})</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {groupAssets.map((a) => (
+                    <button key={a.id} onClick={() => setTargetAsset(a.id)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] transition-colors ${
+                        targetAsset === a.id
+                          ? cat.key === 'crypto'
+                            ? 'bg-crypto/20 text-crypto border border-crypto/40'
+                            : 'bg-warn/20 text-warn border border-warn/30'
+                          : 'bg-bg-primary text-text-secondary border border-transparent hover:bg-bg-panel-hover'
+                      }`}
+                    >{a.id}</button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 

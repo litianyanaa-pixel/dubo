@@ -4,10 +4,12 @@ import RightPanel from './RightPanel'
 import BottomBar from './BottomBar'
 import PriceDisplay from '@/components/market/PriceDisplay'
 import PriceChart from '@/components/market/PriceChart'
+import ScreenEffects from '@/components/effects/ScreenEffects'
 
 export default function GameLayout() {
   return (
     <div className="h-screen w-screen flex flex-col bg-bg-primary overflow-hidden">
+      <ScreenEffects />
       <TopBar />
       <div className="flex flex-1 overflow-hidden">
         <LeftPanel />

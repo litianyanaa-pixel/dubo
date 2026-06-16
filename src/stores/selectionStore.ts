@@ -6,6 +6,6 @@ interface SelectionState {
 }
 
 export const useSelectionStore = create<SelectionState>((set) => ({
-  selectedAsset: 'USD',
+  selectedAsset: 'KAL',
   setSelectedAsset: (id) => set({ selectedAsset: id }),
 }))

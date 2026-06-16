@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useMarketStore } from '@/stores/marketStore'
 import { useSelectionStore } from '@/stores/selectionStore'
 import { useSentimentStore } from '@/stores/sentimentStore'
@@ -21,6 +21,23 @@ export default function PriceDisplay() {
 
   const change = prev !== 0 && prev !== price ? (price - prev) / prev : 0
   const isUp = change >= 0
+
+  // 价格变化闪烁:价格变动时短暂高亮
+  const prevPriceRef = useRef(price)
+  const [priceFlash, setPriceFlash] = useState<'up' | 'down' | null>(null)
+  useEffect(() => {
+    if (price > prevPriceRef.current) {
+      setPriceFlash('up')
+      const t = setTimeout(() => setPriceFlash(null), 400)
+      prevPriceRef.current = price
+      return () => clearTimeout(t)
+    } else if (price < prevPriceRef.current) {
+      setPriceFlash('down')
+      const t = setTimeout(() => setPriceFlash(null), 400)
+      prevPriceRef.current = price
+      return () => clearTimeout(t)
+    }
+  }, [price])
 
   // 所属国家/板块信息
   const country = asset?.countryId ? INITIAL_COUNTRIES.find(c => c.id === asset.countryId) : null
@@ -67,7 +84,9 @@ export default function PriceDisplay() {
           {country && <span className="text-info ml-1">{country.name}</span>}
           {sector && <span className="text-text-muted ml-1">({sector})</span>}
         </p>
-        <p className={`text-4xl font-display font-bold ${isUp ? 'text-up' : 'text-down'}`}>
+        <p className={`text-4xl font-display font-bold rounded px-2 transition-all ${
+          isUp ? 'text-up' : 'text-down'
+        } ${priceFlash === 'up' ? 'animate-price-up scale-105' : priceFlash === 'down' ? 'animate-price-down scale-105' : ''}`}>
           {formatPrice(price, precision)}
         </p>
         <p className={`text-sm mt-0.5 ${isUp ? 'text-up' : 'text-down'}`}>

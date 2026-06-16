@@ -14,7 +14,7 @@ describe('KOLEngine', () => {
     const kols = engine.getKOLs()
     expect(kols.length).toBe(5)
     expect(kols[0].name).toBe('华尔街狼王')
-    expect(kols[0].specialty).toBe('USD')
+    expect(kols[0].specialty).toBe('KAL')
     expect(kols[0].hired).toBe(false)
     expect(kols[0].cooldown).toBe(0)
   })

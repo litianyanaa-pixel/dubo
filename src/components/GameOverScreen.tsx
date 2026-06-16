@@ -1,9 +1,11 @@
+import { useEffect } from 'react'
 import { useGameStore } from '@/stores/gameStore'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useMarketStore } from '@/stores/marketStore'
 import { useUnlockStore } from '@/stores/unlockStore'
 import { formatMoney, formatPercent } from '@/utils/format'
 import { SFX } from '@/utils/sound'
+import CountUp from '@/components/CountUp'
 
 export default function GameOverScreen() {
   const character = useGameStore((s) => s.character)
@@ -47,32 +49,44 @@ export default function GameOverScreen() {
   const gameMinutes = Math.floor(elapsed / 1000 / 60)
   const gameSeconds = Math.floor(elapsed / 1000) % 60
 
-  // Record PnL for unlock tracking
-  // Record PnL for unlock tracking + play sound
-  SFX.settlement()
-  useUnlockStore.getState().recordPnlPercent(pnlPct)
+  // ✅ 修复:把渲染期的副作用移到 useEffect,只执行一次
+  useEffect(() => {
+    SFX.settlement()
+    useUnlockStore.getState().recordPnlPercent(pnlPct)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleRestart = () => {
     usePlayerStore.setState({ cash: 100000, positions: {}, shorts: {}, totalTrades: 0 })
     useGameStore.setState({ phase: 'menu', character: null, elapsed: 0, speed: 1, showHelp: false, mode: 'standard' })
   }
 
+  // 全屏色调:盈利金/绿光晕,破产红/灰暗角
+  const ambientGlow = isBankrupt
+    ? 'radial-gradient(ellipse at 50% 40%, rgba(255, 51, 102, 0.12), transparent 65%)'
+    : totalPnl >= 0
+      ? 'radial-gradient(ellipse at 50% 40%, rgba(255, 215, 0, 0.1), transparent 65%)'
+      : 'radial-gradient(ellipse at 50% 40%, rgba(255, 51, 102, 0.08), transparent 65%)'
+
   return (
-    <div className="h-screen w-screen bg-bg-primary flex flex-col items-center justify-center p-8">
-      <div className="text-center mb-8">
-        <h1 className={`text-4xl font-display font-bold mb-2 ${isBankrupt ? 'text-down' : 'text-up'}`}>
+    <div
+      className="h-screen w-screen bg-bg-primary flex flex-col items-center justify-center p-8 animate-fade-in"
+      style={{ backgroundImage: ambientGlow }}
+    >
+      <div className="text-center mb-8 animate-reveal">
+        <h1 className={`text-4xl font-display font-bold mb-2 ${isBankrupt ? 'text-down animate-pulse-gold' : 'text-up'}`}>
           {isBankrupt ? '破产清算' : '结算离场'}
         </h1>
         <p className="text-text-secondary text-sm">
           {isBankrupt ? '你的资产已归零，游戏结束' : `Day ${gameDays} · 游戏时长 ${gameMinutes}:${gameSeconds.toString().padStart(2, '0')}`}
         </p>
-        <div className={`mt-3 text-xl font-display font-bold ${rank.color}`}>
+        <div className={`mt-3 text-xl font-display font-bold animate-count-pop ${rank.color} ${!isBankrupt && totalPnl >= 0 ? 'animate-pulse-gold' : ''}`}>
           {rank.title}
         </div>
         <p className="text-text-muted text-xs mt-1">{rank.desc}</p>
       </div>
 
-      <div className="bg-bg-panel rounded-lg border border-border-panel p-6 w-80 space-y-3">
+      <div className="bg-bg-panel rounded-lg border border-border-panel p-6 w-80 space-y-3 animate-reveal" style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}>
         <div className="flex items-center gap-2 mb-4">
           <span className="text-2xl">{character?.icon}</span>
           <span className="text-text-primary font-bold">{character?.name}</span>
@@ -93,14 +107,21 @@ export default function GameOverScreen() {
           </div>
 
           <div className="border-t border-border-panel pt-2">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-baseline">
               <span className="text-text-muted">总资产</span>
-              <span className="text-text-primary font-mono font-bold">{formatMoney(totalValue)}</span>
+              <span className="text-text-primary font-mono font-bold">
+                <CountUp value={totalValue} duration={1200} />
+              </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-baseline">
               <span className="text-text-muted">盈亏</span>
               <span className={`font-mono font-bold ${totalPnl >= 0 ? 'text-up' : 'text-down'}`}>
-                {totalPnl >= 0 ? '+' : ''}{formatMoney(totalPnl)} ({formatPercent(pnlPct)})
+                <CountUp
+                  value={totalPnl}
+                  duration={1200}
+                  signed
+                />
+                <span className="ml-1">({formatPercent(pnlPct)})</span>
               </span>
             </div>
           </div>
@@ -120,9 +141,15 @@ export default function GameOverScreen() {
 
       <button
         onClick={handleRestart}
-        className="mt-6 px-8 py-3 rounded-lg font-display font-bold text-lg bg-up/20 text-up border-2 border-up/40 hover:bg-up/30 hover:scale-105 transition-all"
+        className="relative overflow-hidden mt-6 px-8 py-3 rounded-lg font-display font-bold text-lg bg-up/20 text-up border-2 border-up/40 hover:bg-up/30 hover:scale-105 transition-all shadow-lg shadow-up/20 animate-reveal"
+        style={{ animationDelay: '0.4s', animationFillMode: 'backwards' }}
       >
-        重新开始
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-up/30 to-transparent"
+          style={{ animation: 'sheen 2.5s ease-in-out infinite' }}
+        />
+        <span className="relative">重新开始</span>
       </button>
     </div>
   )
