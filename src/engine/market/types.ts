@@ -1,4 +1,4 @@
-export type AssetType = 'currency' | 'stock' | 'commodity' | 'safehaven' | 'crypto' | 'player_token'
+export type AssetType = 'currency' | 'stock' | 'commodity' | 'safehaven' | 'crypto'
 
 export interface Asset {
   id: string

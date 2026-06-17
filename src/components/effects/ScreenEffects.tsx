@@ -53,16 +53,18 @@ export default function ScreenEffects() {
       }),
     )
 
-    // 突发事件 tier 3 → 涨跌全屏闪
+    // 突发事件 tier 3 → 按方向涨跌全屏闪;tier 4 → 黑天鹅震屏
     unsubs.push(
       eventBus.on('event:triggered', (payload) => {
         const tier = payload?.tier ?? 0
+        const dir = payload?.direction ?? 'neutral'
         if (tier >= 4) {
-          // 黑天鹅
-          pushEffect('shake-red', '⚠ 黑天鹅事件', '市场剧烈震荡', 2500)
+          // 黑天鹅:震屏 + 红闪 + 横幅
+          pushEffect('shake-red', `⚠ ${payload?.title ?? '黑天鹅事件'}`, '市场剧烈震荡', 2800)
           SFX.blackSwan()
         } else if (tier >= 3) {
-          pushEffect('flash-down', undefined, undefined, 900)
+          // 重大事件:按方向闪绿/闪红
+          pushEffect(dir === 'up' ? 'flash-up' : dir === 'down' ? 'flash-down' : 'amber-pulse', undefined, undefined, 900)
           SFX.event()
         }
       }),

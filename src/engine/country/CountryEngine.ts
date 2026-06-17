@@ -22,7 +22,7 @@ export interface GeopoliticalEvent {
   id: string
   title: string
   description: string
-  type: 'war_start' | 'war_end' | 'war_update' | 'sanction' | 'trade_deal' | 'arrest_risk' | 'special_auction'
+  type: 'war_start' | 'war_end' | 'war_update' | 'war_reconstruction' | 'sanction' | 'trade_deal' | 'arrest_risk' | 'special_auction'
   targetCountry?: string
   targetAsset?: string
   volatilityMultiplier?: number
@@ -183,13 +183,13 @@ export class CountryEngine {
       }
     }
 
-    // ─── 伽蓝"天算"特殊机制 ───
+    // ─── 美国"美联储AI"特殊机制 ───
     this.tiansuanCounter++
     if (this.tiansuanCounter >= 2) { // 每2个L4 tick（约60秒）
       this.tiansuanCounter = 0
-      const kalan = this.countries.get('kalan')
-      if (kalan) {
-        // 天算随机微调一个经济参数
+      const usa = this.countries.get('usa')
+      if (usa) {
+        // 美联储AI随机微调一个经济参数
         const actions = ['rate', 'subsidy', 'tax'] as const
         const action = actions[Math.floor(Math.random() * actions.length)]
         let title = ''
@@ -198,26 +198,26 @@ export class CountryEngine {
 
         if (action === 'rate') {
           const adjust = (Math.random() - 0.5) * 0.1
-          kalan.interestRate += adjust
-          kalan.interestRate = Math.max(0, Math.min(10, kalan.interestRate))
-          title = '🤖 天算系统调整利率'
-          desc = `伽蓝AI"天算"将利率微调至${kalan.interestRate.toFixed(2)}%`
+          usa.interestRate += adjust
+          usa.interestRate = Math.max(0, Math.min(10, usa.interestRate))
+          title = '🤖 美联储AI调整利率'
+          desc = `美联储AI将利率微调至${usa.interestRate.toFixed(2)}%`
           impact = adjust > 0 ? -2 : 2
         } else if (action === 'subsidy') {
-          title = '🤖 天算系统调整产业补贴'
-          desc = '伽蓝AI优化了科技产业补贴分配'
+          title = '🤖 美联储AI调整产业补贴'
+          desc = '美联储AI优化了科技产业补贴分配'
           impact = 3
         } else {
-          title = '🤖 天算系统调整税率'
-          desc = '伽蓝AI微调了资本利得税'
+          title = '🤖 美联储AI调整税率'
+          desc = '美联储AI微调了资本利得税'
           impact = -1
         }
 
-        // 只在没有更重要的利率事件时才发出天算事件
+        // 只在没有更重要的利率事件时才发出美联储AI事件
         if (!event) {
           event = {
-            id: `eco_tiansuan_${eventCounter++}`,
-            countryId: 'kalan',
+            id: `eco_fed_${eventCounter++}`,
+            countryId: 'usa',
             type: 'tiansuan_adjust',
             title,
             description: desc,
@@ -414,8 +414,9 @@ export class CountryEngine {
         war.phaseTicks > (phaseDurations[war.phase] ?? 5) + 5
 
       if (shouldEnd) {
-        // 战后处理
-        this.resolveWar(war)
+        // 战后处理:补发重建事件
+        const reconEvent = this.resolveWar(war)
+        if (reconEvent) events.push(reconEvent)
         return false // 移除战争
       }
 
@@ -425,28 +426,42 @@ export class CountryEngine {
     return events
   }
 
-  private resolveWar(war: ActiveWar): void {
+  /** 战争结算 + 返回战后重建事件。调用方负责把事件推到事件流。 */
+  private resolveWar(war: ActiveWar): GeopoliticalEvent | null {
     const attacker = this.countries.get(war.attacker)
     const defender = this.countries.get(war.defender)
-    if (!attacker || !defender) return
+    if (!attacker || !defender) return null
+
+    // 胜负判定
+    const attackerWon = war.scoreA > war.scoreD
+    const winner = attackerWon ? attacker : defender
+    const loser = attackerWon ? defender : attacker
 
     // 关系回升到冷战水平
     attacker.relations[war.defender] = Math.min(-20, attacker.relations[war.defender] + 10)
     defender.relations[war.attacker] = Math.min(-20, defender.relations[war.attacker] + 10)
 
-    // 经济损失
-    attacker.gdpGrowth -= 1.0
-    defender.gdpGrowth -= 1.5
-    attacker.satisfaction -= 5
-    defender.satisfaction -= 10
+    // 战争损失(败方更惨)
+    loser.gdpGrowth -= 2.0
+    loser.satisfaction -= 12
+    loser.capitalFlow -= 3
+    winner.gdpGrowth -= 0.5
+    winner.satisfaction -= 4
 
-    // 胜方获利
-    if (war.scoreA > war.scoreD) {
-      attacker.capitalFlow += 2
-      defender.capitalFlow -= 3
-    } else {
-      defender.capitalFlow += 2
-      attacker.capitalFlow -= 3
+    // 胜方获利:赔款流入 + 资源控制
+    winner.capitalFlow += 3
+
+    // 重建事件:描述战后格局变化
+    return {
+      id: `geo_${eventCounter++}`,
+      title: `🏗 ${winner.name}战后重建`,
+      description: `${winner.name}获得战争胜利,${loser.name}赔款并接受重建方案。资源与资本重新分配。`,
+      type: 'war_reconstruction',
+      targetCountry: winner.id,
+      targetAsset: winner.currencyId,
+      volatilityMultiplier: 0.6,
+      sentimentImpact: 8,
+      duration: 2,
     }
   }
 
@@ -458,12 +473,20 @@ export class CountryEngine {
     const defender = this.countries.get(war.defender)
     const template = PEACE_TEMPLATES[Math.floor(Math.random() * PEACE_TEMPLATES.length)]
 
-    this.resolveWar(war)
+    // 战后重建(补发事件到新闻流,作为停火的后续)
+    const reconEvent = this.resolveWar(war)
+    if (reconEvent) {
+      eventBus.emit('news:published', {
+        id: reconEvent.id,
+        templateId: reconEvent.id,
+        targetCountry: reconEvent.targetCountry ?? 'global',
+      })
+    }
 
     return {
       id: `geo_${eventCounter++}`,
       title: template.title.replace('{a}', attacker?.name ?? '交战方').replace('{b}', defender?.name ?? '对手'),
-      description: '停火协议生效，市场情绪回升',
+      description: reconEvent ? `${reconEvent.description}` : '停火协议生效，市场情绪回升',
       type: 'war_end',
       targetCountry: war.attacker,
       targetAsset: attacker?.currencyId,

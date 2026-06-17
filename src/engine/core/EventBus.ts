@@ -14,7 +14,7 @@ export interface EventMap {
   'ai:kol:post': { agentId: string; content: string }
   'news:published': { id: string; templateId: string; targetCountry: string }
   'news:debunked': { id: string }
-  'event:triggered': { id: string; tier: number }
+  'event:triggered': { id: string; tier: number; direction?: 'up' | 'down' | 'neutral'; title?: string }
   'event:chain': { eventId: string; node: string }
   'war:started': { participants: string[] }
   'war:ended': { winner: string; loser: string }

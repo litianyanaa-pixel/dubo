@@ -15,9 +15,9 @@ export interface KOL {
 export type KOLDirection = 'bullish' | 'bearish' | 'panic' | 'greed'
 
 const KOL_POOL: Omit<KOL, 'id' | 'hired' | 'lastPostTick' | 'cooldown'>[] = [
-  { name: '华尔街狼王', followers: 520000, credibility: 75, hireCost: 50000, specialty: 'KAL' },
-  { name: '法兰克福之鹰', followers: 310000, credibility: 60, hireCost: 35000, specialty: 'SRD' },
-  { name: '伦敦金融城之花', followers: 280000, credibility: 70, hireCost: 40000, specialty: 'TDL' },
+  { name: '华尔街狼王', followers: 520000, credibility: 75, hireCost: 50000, specialty: 'USD' },
+  { name: '法兰克福之鹰', followers: 310000, credibility: 60, hireCost: 35000, specialty: 'EUR' },
+  { name: '伦敦金融城之花', followers: 280000, credibility: 70, hireCost: 40000, specialty: 'GBP' },
   { name: '原油大鳄', followers: 150000, credibility: 50, hireCost: 25000, specialty: 'OIL' },
   { name: '苏黎世金舌', followers: 200000, credibility: 80, hireCost: 45000, specialty: 'DGOLD' },
 ]

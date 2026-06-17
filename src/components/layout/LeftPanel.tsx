@@ -171,7 +171,7 @@ const TradeFeed = ({ entries, selectedAsset }: { entries: NewsEntry[]; selectedA
 // --- Create tab (fake news) ---
 function CreateTab() {
   const [selectedTemplate, setSelectedTemplate] = useState(0)
-  const [targetAsset, setTargetAsset] = useState('KAL')
+  const [targetAsset, setTargetAsset] = useState('USD')
   const [published, setPublished] = useState(false)
   const cash = usePlayerStore((s) => s.cash)
   const addEntry = useNewsStore((s) => s.addEntry)

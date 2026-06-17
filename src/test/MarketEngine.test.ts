@@ -3,7 +3,7 @@ import { MarketEngine } from '@/engine/market/MarketEngine'
 import { ALL_ASSETS } from '@/data/assets'
 import { eventBus } from '@/engine/core/EventBus'
 
-const KAL_ASSET = ALL_ASSETS.find(a => a.id === 'KAL')!
+const USD_ASSET = ALL_ASSETS.find(a => a.id === 'USD')!
 
 describe('MarketEngine', () => {
   let engine: MarketEngine
@@ -14,11 +14,11 @@ describe('MarketEngine', () => {
   })
 
   it('registers and retrieves assets', () => {
-    engine.registerAsset(KAL_ASSET)
-    const asset = engine.getAsset('KAL')
+    engine.registerAsset(USD_ASSET)
+    const asset = engine.getAsset('USD')
 
     expect(asset).toBeDefined()
-    expect(asset!.id).toBe('KAL')
+    expect(asset!.id).toBe('USD')
     expect(asset!.currentPrice).toBe(1.0)
   })
 
@@ -27,7 +27,7 @@ describe('MarketEngine', () => {
   })
 
   it('updatePrices emits price:updated events', () => {
-    engine.registerAsset(KAL_ASSET)
+    engine.registerAsset(USD_ASSET)
 
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
@@ -36,25 +36,25 @@ describe('MarketEngine', () => {
 
     expect(handler).toHaveBeenCalledTimes(1)
     const data = handler.mock.calls[0][0]
-    expect(data.assetId).toBe('KAL')
+    expect(data.assetId).toBe('USD')
     expect(typeof data.price).toBe('number')
     expect(typeof data.prevPrice).toBe('number')
     expect(typeof data.change).toBe('number')
   })
 
   it('price stays positive after many updates', () => {
-    engine.registerAsset(KAL_ASSET)
+    engine.registerAsset(USD_ASSET)
 
     for (let i = 0; i < 1000; i++) {
       engine.updatePrices(i, { global: 50 })
     }
 
-    const asset = engine.getAsset('KAL')
+    const asset = engine.getAsset('USD')
     expect(asset!.currentPrice).toBeGreaterThan(0)
   })
 
   it('price changes are within expected volatility range', () => {
-    engine.registerAsset(KAL_ASSET)
+    engine.registerAsset(USD_ASSET)
 
     const handler = vi.fn()
     eventBus.on('price:updated', handler)
@@ -67,7 +67,7 @@ describe('MarketEngine', () => {
   })
 
   it('handles multiple assets', () => {
-    engine.registerAsset(KAL_ASSET)
+    engine.registerAsset(USD_ASSET)
     engine.registerAsset({
       id: 'TEST',
       name: 'Test Coin',
