@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNewsStore, NEWS_TYPES, TRADE_TYPES, SOCIAL_TYPES, type NewsEntry } from '@/stores/newsStore'
 import type { ActiveFakeNews } from '@/stores/newsStore'
 import { useUnlockStore } from '@/stores/unlockStore'
-import { canManipulate, getCredibility, recordManipulation, launchRugToken, pumpRugToken, rugPullToken, getRugTokens } from '@/hooks/useGameLoop'
+import { canManipulate, getCredibility, recordManipulation, launchRugToken, pumpRugToken, rugPullToken, getRugTokens, bidAuctionInsider, getAuctionPending, buyIntel, getIntelAvailable, depositOffshore, withdrawOffshore, openCarryTrade, closeCarryTrade, getOffshoreState } from '@/hooks/useGameLoop'
 import { SFX } from '@/utils/sound'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useMarketStore } from '@/stores/marketStore'
@@ -13,15 +13,22 @@ import { getEngineRefs } from '@/hooks/useGameLoop'
 import { NEWS_TEMPLATES } from '@/engine/news/NewsEngine'
 import { ALL_ASSETS, ASSET_CATEGORIES } from '@/data/assets'
 import { eventBus } from '@/engine/core/EventBus'
+import { useAuctionStore } from '@/stores/auctionStore'
+import { useIntelStore } from '@/stores/intelStore'
+import { useOffshoreStore } from '@/stores/offshoreStore'
+import { INITIAL_COUNTRIES } from '@/data/countries'
 
-type Tab = 'news' | 'trades' | 'social' | 'create' | 'rug'
+type Tab = 'news' | 'trades' | 'social' | 'create' | 'rug' | 'auction' | 'intel' | 'offshore'
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'news', label: '新闻' },
-  { key: 'trades', label: '交易' },
-  { key: 'social', label: '舆论' },
-  { key: 'create', label: '造假' },
-  { key: 'rug', label: '发币' },
+const TABS: { key: Tab; label: string; group: 'info' | 'action' }[] = [
+  { key: 'news', label: '新闻', group: 'info' },
+  { key: 'trades', label: '交易', group: 'info' },
+  { key: 'social', label: '舆论', group: 'info' },
+  { key: 'create', label: '造假', group: 'action' },
+  { key: 'rug', label: '发币', group: 'action' },
+  { key: 'auction', label: '拍卖', group: 'action' },
+  { key: 'intel', label: '情报', group: 'action' },
+  { key: 'offshore', label: '离岸', group: 'action' },
 ]
 
 const AGENT_ICONS: Record<string, string> = { leek: '🥬', whale: '🐋', scammer: '🎭' }
@@ -53,31 +60,53 @@ export default function LeftPanel() {
 
   return (
     <div className="w-[280px] bg-bg-panel border-r border-border-panel p-3 flex flex-col">
-      {/* Tabs */}
-      <div className="flex gap-0.5 mb-2 bg-bg-primary rounded p-0.5">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex-1 py-1 rounded text-[11px] font-bold transition-colors ${
-              tab === t.key
-                ? t.key === 'create'
-                  ? 'bg-danger/20 text-danger'
-                : t.key === 'rug'
-                  ? 'bg-gold/20 text-gold'
+      {/* Tabs - 两行: 信息类 / 操作类 */}
+      <div className="mb-2 space-y-0.5">
+        <div className="flex gap-0.5 bg-bg-primary rounded p-0.5">
+          {TABS.filter(t => t.group === 'info').map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${
+                tab === t.key ? 'bg-up/15 text-up' : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-0.5 bg-bg-primary rounded p-0.5">
+          {TABS.filter(t => t.group === 'action').map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${
+                tab === t.key
+                  ? t.key === 'create' ? 'bg-danger/20 text-danger'
+                  : t.key === 'rug' ? 'bg-gold/20 text-gold'
+                  : t.key === 'auction' ? 'bg-warn/20 text-warn'
+                  : t.key === 'intel' ? 'bg-info/20 text-info'
+                  : t.key === 'offshore' ? 'bg-crypto/20 text-crypto'
                   : 'bg-up/15 text-up'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'create' ? (
         <CreateTab />
       ) : tab === 'rug' ? (
         <RugPullTab />
+      ) : tab === 'auction' ? (
+        <AuctionTab />
+      ) : tab === 'intel' ? (
+        <IntelTab />
+      ) : tab === 'offshore' ? (
+        <OffshoreTab />
       ) : tab === 'trades' ? (
         <TradeFeed entries={reversed} selectedAsset={selectedAsset} />
       ) : (
@@ -412,6 +441,251 @@ function RugPullTab() {
 
       {tokens.length === 0 && (
         <p className="text-text-muted text-xs text-center mt-4">还没有发行任何代币</p>
+      )}
+    </div>
+  )
+}
+
+// --- Auction tab: 沙特资源拍卖 ---
+function AuctionTab() {
+  const pending = useAuctionStore((s) => s.pending)
+  const history = useAuctionStore((s) => s.history)
+  const cash = usePlayerStore((s) => s.cash)
+  const [, force] = useState(0)
+
+  const handleBid = (pkgId: string, cost: number) => {
+    if (cash < cost) return
+    bidAuctionInsider(pkgId)
+    force((n) => n + 1)
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto space-y-2">
+      <p className="text-text-muted text-xs">沙特定期拍卖大宗商品,竞标内幕可提前获知涨跌方向</p>
+
+      {pending.length === 0 && (
+        <p className="text-text-muted text-xs animate-pulse mt-4 text-center">等待下一轮拍卖...</p>
+      )}
+
+      {pending.map((pkg) => (
+        <div key={pkg.id} className="bg-bg-primary rounded p-2 border border-warn/20 space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-warn text-xs font-bold">🛢 {pkg.assetName}</span>
+            <span className="text-text-muted text-[10px]">{pkg.revealInTicks} 轮后揭晓</span>
+          </div>
+          {pkg.insiderKnown ? (
+            <div className={`text-xs font-bold ${pkg.direction === 'up' ? 'text-up' : 'text-down'}`}>
+              内幕: {pkg.direction === 'up' ? '▲ 将上涨' : '▼ 将下跌'} ({(pkg.magnitude * 100).toFixed(1)}%)
+            </div>
+          ) : (
+            <button
+              onClick={() => handleBid(pkg.id, pkg.insiderCost)}
+              disabled={cash < pkg.insiderCost}
+              className={`w-full py-1 rounded text-[10px] font-bold border ${
+                cash >= pkg.insiderCost
+                  ? 'bg-warn/10 text-warn border-warn/30 hover:bg-warn/20'
+                  : 'bg-bg-panel text-text-muted border-border-panel cursor-not-allowed'
+              }`}
+            >
+              🕵 竞标内幕 (-{formatMoney(pkg.insiderCost)})
+            </button>
+          )}
+        </div>
+      ))}
+
+      {history.length > 0 && (
+        <div className="space-y-1">
+          <h4 className="text-text-muted text-[10px] uppercase">已揭晓</h4>
+          {history.slice(-5).reverse().map((pkg) => (
+            <div key={pkg.id} className="text-[10px] flex justify-between bg-bg-panel rounded px-2 py-1">
+              <span className="text-text-secondary">{pkg.assetName}</span>
+              <span className={pkg.direction === 'up' ? 'text-up' : 'text-down'}>
+                {pkg.direction === 'up' ? '▲' : '▼'} {(pkg.magnitude * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Intel tab: 瑞士情报拍卖 ---
+function IntelTab() {
+  const available = useIntelStore((s) => s.available)
+  const owned = useIntelStore((s) => s.owned)
+  const cash = usePlayerStore((s) => s.cash)
+  const [, force] = useState(0)
+
+  const handleBuy = (pkgId: string, cost: number) => {
+    if (cash < cost) return
+    buyIntel(pkgId)
+    force((n) => n + 1)
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto space-y-2">
+      <p className="text-text-muted text-xs">瑞士保密法情报包,购买后获知权贵动向(限时兑现)</p>
+
+      {available.length === 0 && (
+        <p className="text-text-muted text-xs animate-pulse mt-4 text-center">暂无待售情报...</p>
+      )}
+
+      {available.map((pkg) => (
+        <div key={pkg.id} className="bg-bg-primary rounded p-2 border border-info/20 space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-info text-xs font-bold">🕵 {pkg.assetName}</span>
+            <span className="text-text-muted text-[10px]">方向未知</span>
+          </div>
+          <p className="text-text-secondary text-[10px]">{pkg.title}</p>
+          <button
+            onClick={() => handleBuy(pkg.id, pkg.cost)}
+            disabled={cash < pkg.cost}
+            className={`w-full py-1 rounded text-[10px] font-bold border ${
+              cash >= pkg.cost
+                ? 'bg-info/10 text-info border-info/30 hover:bg-info/20'
+                : 'bg-bg-panel text-text-muted border-border-panel cursor-not-allowed'
+            }`}
+          >
+            购买情报 (-{formatMoney(pkg.cost)})
+          </button>
+        </div>
+      ))}
+
+      {owned.length > 0 && (
+        <div className="space-y-1">
+          <h4 className="text-text-muted text-[10px] uppercase">已购(等待兑现)</h4>
+          {owned.map((pkg) => (
+            <div key={pkg.id} className="bg-info/5 border border-info/20 rounded p-1.5 text-[10px]">
+              <div className="flex justify-between">
+                <span className="text-text-secondary">{pkg.assetName}</span>
+                <span className={pkg.direction === 'up' ? 'text-up' : 'text-down'}>
+                  {pkg.direction === 'up' ? '▲' : '▼'} {pkg.expireInTicks} 轮后兑现
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Offshore tab: 新加坡离岸账户 + 利差套利 ---
+function OffshoreTab() {
+  const state = useOffshoreStore((s) => s)
+  const cash = usePlayerStore((s) => s.cash)
+  const [depositAmount, setDepositAmount] = useState('100000')
+  const [funding, setFunding] = useState('JPY')
+  const [target, setTarget] = useState('SAR')
+  const [carryNotional, setCarryNotional] = useState('100000')
+  const [, force] = useState(0)
+
+  // 可用于 carry trade 的货币(低息做融资,高息做标的)
+  const currencies = INITIAL_COUNTRIES.map((c) => ({ id: c.currencyId, rate: c.interestRate }))
+
+  const handleDeposit = () => {
+    const amt = parseFloat(depositAmount) || 0
+    if (amt <= 0 || amt > cash) return
+    depositOffshore(amt)
+    force((n) => n + 1)
+  }
+  const handleWithdraw = () => {
+    const amt = parseFloat(depositAmount) || 0
+    if (amt <= 0) return
+    withdrawOffshore(amt)
+    force((n) => n + 1)
+  }
+  const handleOpenCarry = () => {
+    const amt = parseFloat(carryNotional) || 0
+    if (amt <= 0) return
+    openCarryTrade(funding, target, amt)
+    force((n) => n + 1)
+  }
+  const handleCloseCarry = (id: string) => {
+    closeCarryTrade(id)
+    force((n) => n + 1)
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto space-y-2">
+      <p className="text-text-muted text-xs">新加坡离岸账户:降低监管热度 + 利差套利</p>
+
+      {/* 余额 + 监管抵消 */}
+      <div className="bg-bg-primary rounded p-2 border border-crypto/20 space-y-1 text-xs">
+        <div className="flex justify-between">
+          <span className="text-text-muted">离岸余额</span>
+          <span className="text-crypto font-mono">{formatMoney(state.balance)}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-text-muted">监管抵消</span>
+          <div className="flex items-center gap-1">
+            <div className="w-16 h-1.5 bg-bg-panel rounded-full overflow-hidden">
+              <div className="h-full bg-crypto rounded-full transition-all" style={{ width: `${state.shieldStrength}%` }} />
+            </div>
+            <span className="text-crypto font-mono text-[10px]">{state.shieldStrength.toFixed(0)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 存取款 */}
+      <div className="space-y-1">
+        <input
+          type="number"
+          value={depositAmount}
+          onChange={(e) => setDepositAmount(e.target.value)}
+          className="w-full bg-bg-primary border border-border-panel rounded px-2 py-1 text-text-primary font-mono text-xs"
+        />
+        <div className="flex gap-1">
+          <button onClick={handleDeposit} disabled={cash < parseFloat(depositAmount)}
+            className="flex-1 py-1 rounded text-[10px] font-bold border bg-crypto/10 text-crypto border-crypto/30 hover:bg-crypto/20 disabled:opacity-50">
+            存入
+          </button>
+          <button onClick={handleWithdraw}
+            className="flex-1 py-1 rounded text-[10px] font-bold border bg-bg-primary text-text-secondary border-border-panel hover:bg-bg-panel-hover">
+            取出
+          </button>
+        </div>
+      </div>
+
+      {/* 利差套利 */}
+      <div className="bg-bg-primary rounded p-2 border border-border-panel space-y-1.5">
+        <p className="text-text-muted text-[10px] uppercase">利差套利 (carry trade)</p>
+        <div className="flex gap-1 items-center text-[10px]">
+          <select value={funding} onChange={(e) => setFunding(e.target.value)} className="bg-bg-panel border border-border-panel rounded px-1 py-0.5 text-text-primary">
+            {currencies.map((c) => <option key={c.id} value={c.id}>借 {c.id} ({c.rate}%)</option>)}
+          </select>
+          <span className="text-text-muted">→</span>
+          <select value={target} onChange={(e) => setTarget(e.target.value)} className="bg-bg-panel border border-border-panel rounded px-1 py-0.5 text-text-primary">
+            {currencies.map((c) => <option key={c.id} value={c.id}>投 {c.id} ({c.rate}%)</option>)}
+          </select>
+        </div>
+        <input
+          type="number"
+          value={carryNotional}
+          onChange={(e) => setCarryNotional(e.target.value)}
+          className="w-full bg-bg-panel border border-border-panel rounded px-2 py-1 text-text-primary font-mono text-xs"
+        />
+        <button onClick={handleOpenCarry}
+          className="w-full py-1 rounded text-[10px] font-bold border bg-up/10 text-up border-up/30 hover:bg-up/20">
+          建仓套利
+        </button>
+      </div>
+
+      {/* 活跃套利头寸 */}
+      {state.carryTrades.length > 0 && (
+        <div className="space-y-1">
+          <h4 className="text-text-muted text-[10px] uppercase">活跃套利</h4>
+          {state.carryTrades.map((t) => (
+            <div key={t.id} className="bg-up/5 border border-up/20 rounded p-1.5 text-[10px] flex justify-between items-center">
+              <span className="text-text-secondary">{t.fundingCurrency}→{t.targetCurrency} <span className="text-up">+{t.rateSpread.toFixed(2)}%</span></span>
+              <div className="flex items-center gap-1">
+                <span className="text-text-muted">{formatMoney(t.notional)}</span>
+                <button onClick={() => handleCloseCarry(t.id)} className="text-down hover:text-danger">平仓</button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

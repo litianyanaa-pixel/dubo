@@ -10,6 +10,9 @@ import { TraitEngine } from '@/engine/player/TraitEngine'
 import { CountryEngine } from '@/engine/country/CountryEngine'
 import { RugPullEngine } from '@/engine/rugpull/RugPullEngine'
 import { CorrelationMatrix } from '@/engine/market/CorrelationMatrix'
+import { AuctionEngine } from '@/engine/auction/AuctionEngine'
+import { IntelEngine } from '@/engine/intel/IntelEngine'
+import { OffshoreEngine } from '@/engine/offshore/OffshoreEngine'
 import { eventBus } from '@/engine/core/EventBus'
 import { useGameStore } from '@/stores/gameStore'
 import { useMarketStore } from '@/stores/marketStore'
@@ -19,6 +22,9 @@ import { useKOLStore } from '@/stores/kolStore'
 import { usePlayerStore } from '@/stores/playerStore'
 import { useUnlockStore } from '@/stores/unlockStore'
 import { useCountryStore, type CountrySnapshot, type WarInfo } from '@/stores/countryStore'
+import { useAuctionStore } from '@/stores/auctionStore'
+import { useIntelStore } from '@/stores/intelStore'
+import { useOffshoreStore } from '@/stores/offshoreStore'
 import { ALL_ASSETS, setSessionAssets } from '@/data/assets'
 import { generateSessionCoins } from '@/data/virtualCoins'
 import { SFX } from '@/utils/sound'
@@ -34,10 +40,13 @@ export interface EngineRefs {
   country: CountryEngine | null
   rugpull: RugPullEngine | null
   correlation: CorrelationMatrix | null
+  auction: AuctionEngine | null
+  intel: IntelEngine | null
+  offshore: OffshoreEngine | null
   currentTick: number
 }
 
-const engineRef: EngineRefs = { loop: null, market: null, sentiment: null, ai: null, kol: null, trait: null, country: null, rugpull: null, correlation: null, currentTick: 0 }
+const engineRef: EngineRefs = { loop: null, market: null, sentiment: null, ai: null, kol: null, trait: null, country: null, rugpull: null, correlation: null, auction: null, intel: null, offshore: null, currentTick: 0 }
 
 export function getEngineRefs(): EngineRefs {
   return engineRef
@@ -130,6 +139,99 @@ export function getRugTokens() {
   return engineRef.rugpull?.getTokens() ?? []
 }
 
+// ─── 沙特资源拍卖 ───
+export function bidAuctionInsider(packageId: string): boolean {
+  const { auction, trait } = engineRef
+  if (!auction) return false
+  const pkg = auction.getPending().find(p => p.id === packageId)
+  if (!pkg || pkg.insiderKnown) return false
+  const cost = pkg.insiderCost
+  if (usePlayerStore.getState().cash < cost) return false
+  usePlayerStore.setState({ cash: usePlayerStore.getState().cash - cost })
+  const result = auction.bidInsider(packageId)
+  if (result) {
+    useAuctionStore.getState().markInsider(packageId)
+    recordManipulation(4)
+    return true
+  }
+  return false
+}
+
+export function getAuctionPending() {
+  return engineRef.auction?.getPending() ?? []
+}
+
+// ─── 瑞士情报拍卖 ───
+export function buyIntel(packageId: string): boolean {
+  const { intel } = engineRef
+  if (!intel) return false
+  const pkg = intel.getAvailable().find(p => p.id === packageId)
+  if (!pkg) return false
+  if (usePlayerStore.getState().cash < pkg.cost) return false
+  usePlayerStore.setState({ cash: usePlayerStore.getState().cash - pkg.cost })
+  const result = intel.purchase(packageId)
+  if (result) {
+    useIntelStore.getState().set({
+      available: intel.getAvailable(),
+      owned: intel.getOwned(),
+      history: intel.getHistory(),
+    })
+    recordManipulation(5)
+    SFX.unlock()
+    return true
+  }
+  return false
+}
+
+export function getIntelAvailable() {
+  return engineRef.intel?.getAvailable() ?? []
+}
+
+// ─── 新加坡离岸账户 ───
+export function depositOffshore(amount: number): boolean {
+  const { offshore } = engineRef
+  if (!offshore) return false
+  if (usePlayerStore.getState().cash < amount || amount <= 0) return false
+  usePlayerStore.setState({ cash: usePlayerStore.getState().cash - amount })
+  offshore.deposit(amount)
+  useOffshoreStore.getState().set(offshore.getState())
+  recordManipulation(3)
+  return true
+}
+
+export function withdrawOffshore(amount: number): boolean {
+  const { offshore } = engineRef
+  if (!offshore) return false
+  const actual = offshore.withdraw(amount)
+  if (actual <= 0) return false
+  usePlayerStore.setState({ cash: usePlayerStore.getState().cash + actual })
+  useOffshoreStore.getState().set(offshore.getState())
+  return true
+}
+
+export function openCarryTrade(fundingCurrency: string, targetCurrency: string, notional: number): boolean {
+  const { offshore } = engineRef
+  if (!offshore) return false
+  const trade = offshore.openCarryTrade(fundingCurrency, targetCurrency, notional)
+  if (!trade) return false
+  useOffshoreStore.getState().set(offshore.getState())
+  recordManipulation(2)
+  return true
+}
+
+export function closeCarryTrade(tradeId: string): boolean {
+  const { offshore } = engineRef
+  if (!offshore) return false
+  const result = offshore.closeCarryTrade(tradeId)
+  if (!result) return false
+  useOffshoreStore.getState().set(offshore.getState())
+  return true
+}
+
+export function getOffshoreState() {
+  return engineRef.offshore?.getState() ?? { balance: 0, shieldStrength: 0, carryTrades: [] }
+}
+
 /** 同步国家数据到 store */
 function syncCountryData(country: CountryEngine): void {
   const snapshots: CountrySnapshot[] = country.getAllCountries().map(c => ({
@@ -176,6 +278,9 @@ export function useGameLoop() {
     const kol = new KOLEngine()
     const trait = new TraitEngine()
     const rugpull = new RugPullEngine()
+    const auction = new AuctionEngine()
+    const intel = new IntelEngine()
+    const offshore = new OffshoreEngine()
 
     engineRef.loop = loop
     engineRef.market = market
@@ -186,6 +291,9 @@ export function useGameLoop() {
     engineRef.country = country
     engineRef.rugpull = rugpull
     engineRef.correlation = correlation
+    engineRef.auction = auction
+    engineRef.intel = intel
+    engineRef.offshore = offshore
 
     // 初始化KOL
     useKOLStore.getState().setKOLs(kol.getKOLs())
@@ -338,6 +446,63 @@ export function useGameLoop() {
         eventBus.emit('news:debunked', { id: news.id })
       }
 
+      // ─── 沙特资源拍卖 ───
+      const revealedAuctions = auction.tick()
+      for (const pkg of revealedAuctions) {
+        const asset = market.getAsset(pkg.assetId)
+        if (asset) {
+          const impact = pkg.direction === 'up' ? pkg.magnitude : -pkg.magnitude
+          asset.currentPrice *= (1 + impact)
+        }
+        useNewsStore.getState().addEntry({
+          id: pkg.id + '_reveal',
+          title: `🛢 ${pkg.title}`,
+          description: `沙特拍卖揭晓:${pkg.description}(${pkg.assetName} ${pkg.direction === 'up' ? '↑' : '↓'})`,
+          type: 'event',
+        })
+        market.addTradeFlow(pkg.assetId, pkg.direction === 'up' ? 'buy' : 'sell', pkg.magnitude * 5_000_000)
+      }
+      useAuctionStore.getState().set({ pending: auction.getPending(), history: auction.getHistory() })
+
+      // ─── 瑞士情报拍卖(兑现) ───
+      const resolvedIntel = intel.tick()
+      for (const pkg of resolvedIntel) {
+        if (pkg.purchased) {
+          // 仅玩家购买的情报兑现时才冲击价格(否则只是噪音)
+          const asset = market.getAsset(pkg.assetId)
+          if (asset) {
+            const impact = pkg.direction === 'up' ? pkg.magnitude : -pkg.magnitude
+            asset.currentPrice *= (1 + impact)
+          }
+          useNewsStore.getState().addEntry({
+            id: pkg.id + '_resolve',
+            title: `🕵 情报兑现: ${pkg.title}`,
+            description: `${pkg.assetName} ${pkg.direction === 'up' ? '↑' : '↓'} ${pkg.description}`,
+            type: 'event',
+          })
+        }
+      }
+      useIntelStore.getState().set({
+        available: intel.getAvailable(),
+        owned: intel.getOwned(),
+        history: intel.getHistory(),
+      })
+
+      // ─── 新加坡离岸账户(结算套利 + 衰减监管抵消) ───
+      const offshoreResult = offshore.tick()
+      if (offshoreResult.carryIncome > 0 && offshore.getState().carryTrades.length > 0) {
+        // 套利有收益时发一条轻量新闻(避免刷屏,只发超过阈值时)
+        if (offshoreResult.carryIncome > 1000) {
+          useNewsStore.getState().addEntry({
+            id: `carry_${Date.now()}`,
+            title: '💰 离岸套利结算',
+            description: `利差套利头寸结算收益 +${offshoreResult.carryIncome.toFixed(0)}`,
+            type: 'social',
+          })
+        }
+      }
+      useOffshoreStore.getState().set(offshore.getState())
+
       syncCountryData(country)
     })
 
@@ -456,6 +621,9 @@ export function useGameLoop() {
       engineRef.country = null
       engineRef.rugpull = null
       engineRef.correlation = null
+      engineRef.auction = null
+      engineRef.intel = null
+      engineRef.offshore = null
     }
   }, [])
 
