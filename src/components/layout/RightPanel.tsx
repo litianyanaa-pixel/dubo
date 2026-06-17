@@ -7,10 +7,12 @@ import { useNewsStore } from '@/stores/newsStore'
 import { useKOLStore } from '@/stores/kolStore'
 import { formatPrice, formatMoney } from '@/utils/format'
 import { ALL_ASSETS } from '@/data/assets'
-import { getEngineRefs, commandKOL, runPrediction, getPrediction, canPredict, getCredibility, canManipulate } from '@/hooks/useGameLoop'
+import { getEngineRefs, commandKOL, runPrediction, getPrediction, canPredict, getCredibility, canManipulate, manipulatePrice, canManipulatePrice, getManipulateCooldownRemaining } from '@/hooks/useGameLoop'
 import type { KOLDirection } from '@/engine/kol/KOLEngine'
 import type { Prediction } from '@/engine/player/TraitEngine'
 import { SFX } from '@/utils/sound'
+import { useObjectiveStore } from '@/stores/objectiveStore'
+import { useToastStore } from '@/components/Toast'
 
 type TradeAction = 'openLong' | 'closeLong' | 'openShort' | 'closeShort'
 
@@ -30,8 +32,17 @@ export default function RightPanel() {
   const shorts = usePlayerStore((s) => s.shorts)
   const prices = useMarketStore((s) => s.prices)
   const selectedAsset = useSelectionStore((s) => s.selectedAsset)
+  const startCash = useGameStore((s) => s.startCash)
   const asset = ALL_ASSETS.find((a) => a.id === selectedAsset)
   const assetPrice = prices[selectedAsset] ?? asset?.basePrice ?? 1
+
+  // 总净值(供目标系统显示进度)
+  const longValue = Object.values(positions).reduce((s, p) => s + p.amount * (prices[p.assetId] ?? 0), 0)
+  const shortVal = Object.values(shorts).reduce((s, p) => {
+    const price = prices[p.assetId] ?? p.avgEntry
+    return s + p.amount * p.avgEntry + (p.avgEntry - price) * p.amount
+  }, 0)
+  const totalValue = cash + longValue + shortVal
 
   const qty = parseFloat(quantity) || 0
   const precision = (asset?.basePrice ?? 1) >= 100 ? 2 : 4
@@ -74,6 +85,21 @@ export default function RightPanel() {
       SFX.tradeSuccess()
       setTimeout(() => setFlash(null), 400)
 
+      // 平仓时显示实现盈亏 toast
+      if (action === 'closeLong' && longPos) {
+        const pnl = (assetPrice - longPos.avgCost) * qty
+        useToastStore.getState().addToast(
+          `${selectedAsset} 平多 ${pnl >= 0 ? '获利' : '亏损'} ${pnl >= 0 ? '+' : ''}${(pnl / 1000).toFixed(1)}K`,
+          pnl >= 0 ? 'success' : 'danger'
+        )
+      } else if (action === 'closeShort' && shortPos) {
+        const pnl = (shortPos.avgEntry - assetPrice) * qty
+        useToastStore.getState().addToast(
+          `${selectedAsset} 平空 ${pnl >= 0 ? '获利' : '亏损'} ${pnl >= 0 ? '+' : ''}${(pnl / 1000).toFixed(1)}K`,
+          pnl >= 0 ? 'success' : 'danger'
+        )
+      }
+
       // Player trade impacts market
       const flowSide = (action === 'openLong' || action === 'closeShort') ? 'buy' : 'sell'
       getEngineRefs().market?.addTradeFlow(selectedAsset, flowSide, estimatedCost)
@@ -100,6 +126,9 @@ export default function RightPanel() {
     <div className="w-[300px] bg-bg-panel border-l border-border-panel p-3 flex flex-col gap-3 text-sm overflow-y-auto">
       {/* 冻结警告 + 操纵热度 */}
       <StatusBar />
+
+      {/* 目标系统 */}
+      <ObjectiveBar totalNetWorth={totalValue} startCash={startCash} />
 
       {/* Wallet summary - 全部持仓总览 */}
       <div>
@@ -224,6 +253,9 @@ export default function RightPanel() {
           </button>
         </div>
       </div>
+
+      {/* 主动操纵: 砸盘/拉升 */}
+      <ManipulatePanel assetId={selectedAsset} cash={cash} />
 
       {/* Quick position sizing */}
       <div className="flex gap-1">
@@ -454,6 +486,152 @@ function KOLPanel() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// --- 目标系统: 阶段进度 + 限时任务 ---
+function ObjectiveBar({ totalNetWorth, startCash }: { totalNetWorth: number; startCash: number }) {
+  const milestones = useObjectiveStore((s) => s.milestones)
+  const currentObjective = useObjectiveStore((s) => s.currentObjective)
+  // 每秒刷新(任务倒计时)
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const i = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(i)
+  }, [])
+
+  // 找到下一个未达成的里程碑
+  const nextMilestone = milestones.find((m) => !m.achieved)
+  const stageProgress = nextMilestone && startCash > 0
+    ? Math.min(100, ((totalNetWorth - startCash) / (nextMilestone.target - startCash)) * 100)
+    : 100
+
+  return (
+    <div className="bg-bg-primary rounded p-2 border border-border-panel space-y-2">
+      {/* 阶段进度 */}
+      {nextMilestone ? (
+        <div>
+          <div className="flex justify-between items-center text-[10px] mb-0.5">
+            <span className="text-text-muted">🎯 阶段 {nextMilestone.stage}</span>
+            <span className="text-text-secondary">{nextMilestone.label}</span>
+          </div>
+          <div className="w-full h-1.5 bg-bg-panel rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gold rounded-full transition-all duration-500"
+              style={{ width: `${Math.max(0, stageProgress)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] mt-0.5">
+            <span className="text-text-muted">{Math.max(0, stageProgress).toFixed(0)}%</span>
+            <span className="text-text-muted">目标 {nextMilestone.target >= 1e6 ? `${(nextMilestone.target / 1e6).toFixed(1)}M` : `${(nextMilestone.target / 1e3).toFixed(0)}K`}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-gold text-[10px] text-center font-bold">🏆 已达成所有阶段!</p>
+      )}
+
+      {/* 限时任务 */}
+      {currentObjective ? (
+        <div className="border-t border-border-panel pt-1.5">
+          <div className="flex justify-between items-center text-[10px] mb-0.5">
+            <span className="text-info">⚡ 限时任务</span>
+            <span className="text-warn font-mono">{Math.ceil(currentObjective.remainTicks * 3)}s</span>
+          </div>
+          <p className="text-text-secondary text-[10px] leading-tight">{currentObjective.description}</p>
+          <div className="w-full h-1 bg-bg-panel rounded-full overflow-hidden mt-1">
+            <div
+              className={`h-full rounded-full transition-all ${currentObjective.progress >= currentObjective.target ? 'bg-up' : 'bg-info'}`}
+              style={{ width: `${Math.min(100, (currentObjective.progress / currentObjective.target) * 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] mt-0.5">
+            <span className="text-text-muted">{currentObjective.progress.toFixed(0)}/{currentObjective.target}</span>
+            <span className="text-gold">+{(currentObjective.reward / 1000).toFixed(0)}K</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-text-muted text-[9px] text-center border-t border-border-panel pt-1.5">等待新任务...</p>
+      )}
+    </div>
+  )
+}
+
+// --- 主动操纵: 砸盘/拉升 ---
+function ManipulatePanel({ assetId, cash }: { assetId: string; cash: number }) {
+  const [amount, setAmount] = useState(100000)
+  const [result, setResult] = useState<{ ok: boolean; reason?: string } | null>(null)
+  const [, force] = useState(0)
+
+  const cooldownReady = canManipulatePrice()
+  const cooldownRemain = getManipulateCooldownRemaining()
+
+  const doManipulate = (direction: 'up' | 'down') => {
+    const r = manipulatePrice(assetId, direction, amount)
+    setResult(r)
+    force((n) => n + 1)
+  }
+
+  const tiers = [50000, 100000, 500000, 1000000]
+
+  return (
+    <div className="bg-bg-primary rounded p-2 border border-border-panel">
+      <div className="flex justify-between items-center mb-1.5">
+        <h4 className="text-text-secondary text-[10px] uppercase tracking-wider">主动操纵 · {assetId}</h4>
+        <span className={`text-[10px] ${cooldownReady ? 'text-up' : 'text-warn'}`}>
+          {cooldownReady ? '就绪' : `冷却 ${cooldownRemain}s`}
+        </span>
+      </div>
+
+      {/* 金额档位 */}
+      <div className="flex gap-0.5 mb-1.5">
+        {tiers.map((t) => (
+          <button
+            key={t}
+            onClick={() => setAmount(t)}
+            className={`flex-1 py-0.5 rounded text-[9px] border ${
+              amount === t
+                ? 'bg-warn/15 text-warn border-warn/30'
+                : 'bg-bg-panel text-text-muted border-border-panel hover:text-text-secondary'
+            }`}
+          >
+            {t >= 1000000 ? `${t / 1000000}M` : `${t / 1000}K`}
+          </button>
+        ))}
+      </div>
+
+      {/* 砸盘 / 拉升 按钮 */}
+      <div className="flex gap-1">
+        <button
+          onClick={() => doManipulate('up')}
+          disabled={!cooldownReady || cash < amount}
+          className={`flex-1 py-1.5 rounded text-xs font-bold border ${
+            cooldownReady && cash >= amount
+              ? 'bg-up/15 text-up border-up/40 hover:bg-up/25'
+              : 'bg-bg-panel text-text-muted border-border-panel cursor-not-allowed'
+          }`}
+        >
+          🚀 拉升
+        </button>
+        <button
+          onClick={() => doManipulate('down')}
+          disabled={!cooldownReady || cash < amount}
+          className={`flex-1 py-1.5 rounded text-xs font-bold border ${
+            cooldownReady && cash >= amount
+              ? 'bg-down/15 text-down border-down/40 hover:bg-down/25'
+              : 'bg-bg-panel text-text-muted border-border-panel cursor-not-allowed'
+          }`}
+        >
+          💥 砸盘
+        </button>
+      </div>
+
+      {result && !result.ok && (
+        <p className="text-down text-[10px] mt-1 text-center">{result.reason}</p>
+      )}
+      <p className="text-text-muted text-[9px] mt-1 text-center">
+        消耗资金,直接推动价格 ±1-8%,累积操纵热度,8 秒冷却
+      </p>
     </div>
   )
 }

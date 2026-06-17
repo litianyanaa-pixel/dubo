@@ -13,6 +13,7 @@ import { CorrelationMatrix } from '@/engine/market/CorrelationMatrix'
 import { AuctionEngine } from '@/engine/auction/AuctionEngine'
 import { IntelEngine } from '@/engine/intel/IntelEngine'
 import { OffshoreEngine } from '@/engine/offshore/OffshoreEngine'
+import { ObjectiveEngine } from '@/engine/objective/ObjectiveEngine'
 import { eventBus } from '@/engine/core/EventBus'
 import { useGameStore } from '@/stores/gameStore'
 import { useMarketStore } from '@/stores/marketStore'
@@ -25,6 +26,8 @@ import { useCountryStore, type CountrySnapshot, type WarInfo } from '@/stores/co
 import { useAuctionStore } from '@/stores/auctionStore'
 import { useIntelStore } from '@/stores/intelStore'
 import { useOffshoreStore } from '@/stores/offshoreStore'
+import { useObjectiveStore } from '@/stores/objectiveStore'
+import { useToastStore } from '@/components/Toast'
 import { ALL_ASSETS, setSessionAssets } from '@/data/assets'
 import { generateSessionCoins } from '@/data/virtualCoins'
 import { SFX } from '@/utils/sound'
@@ -44,10 +47,11 @@ export interface EngineRefs {
   auction: AuctionEngine | null
   intel: IntelEngine | null
   offshore: OffshoreEngine | null
+  objective: ObjectiveEngine | null
   currentTick: number
 }
 
-const engineRef: EngineRefs = { loop: null, market: null, sentiment: null, ai: null, kol: null, trait: null, country: null, rugpull: null, correlation: null, auction: null, intel: null, offshore: null, currentTick: 0 }
+const engineRef: EngineRefs = { loop: null, market: null, sentiment: null, ai: null, kol: null, trait: null, country: null, rugpull: null, correlation: null, auction: null, intel: null, offshore: null, objective: null, currentTick: 0 }
 
 export function getEngineRefs(): EngineRefs {
   return engineRef
@@ -102,8 +106,20 @@ export function getCredibility(): number | null {
   return engineRef.trait.getCredibility()
 }
 
+// 操纵行为计数器(供目标系统统计 manipulate 类任务进度)
+let manipulateCounter = 0
+// 上次的操纵热度(用于检测跨越危险阈值)
+let lastManipScore = 0
+
 export function recordManipulation(level: number): void {
   engineRef.country?.recordManipulation(level)
+  manipulateCounter++
+  // 检测热度是否刚跨过逮捕阈值(15)
+  const currentScore = engineRef.country?.getManipulationScore() ?? 0
+  if (lastManipScore < 15 && currentScore >= 15) {
+    useToastStore.getState().addToast('⚠ 操纵热度达危险区,小心被逮捕', 'warning')
+  }
+  lastManipScore = currentScore
 }
 
 export function launchRugToken() {
@@ -233,6 +249,60 @@ export function getOffshoreState() {
   return engineRef.offshore?.getState() ?? { balance: 0, shieldStrength: 0, carryTrades: [] }
 }
 
+// ─── 主动操纵: 砸盘 / 拉升 ───
+// 玩家消耗资金 + 操纵热度,直接推动价格,有冷却
+let manipulateCooldownUntil = 0
+const MANIPULATE_COOLDOWN_MS = 8000 // 8 秒冷却
+
+export function manipulatePrice(assetId: string, direction: 'up' | 'down', spendAmount: number): { ok: boolean; reason?: string; impact?: number } {
+  if (Date.now() < manipulateCooldownUntil) {
+    return { ok: false, reason: '冷却中' }
+  }
+  const { market, country } = engineRef
+  if (!market || !country) return { ok: false, reason: '引擎未就绪' }
+  if (spendAmount < 10000) return { ok: false, reason: '金额过低' }
+
+  const cash = usePlayerStore.getState().cash
+  if (cash < spendAmount) return { ok: false, reason: '资金不足' }
+
+  // 扣资金
+  usePlayerStore.setState({ cash: cash - spendAmount })
+
+  // 直接价格冲击: 花费越多冲击越大,封顶 ±8%
+  // impact = min(0.08, spendAmount / 5_000_000 * 0.08)
+  const impact = Math.min(0.08, (spendAmount / 5_000_000) * 0.08)
+  const signedImpact = direction === 'up' ? impact : -impact
+  const asset = market.getAsset(assetId)
+  if (asset) {
+    asset.currentPrice *= (1 + signedImpact)
+  }
+  // 同时注入大额资金流(让 AI 跟风)
+  market.addTradeFlow(assetId, direction === 'up' ? 'buy' : 'sell', spendAmount * 3)
+
+  // 消耗操纵热度(比造假轻)
+  recordManipulation(3)
+  manipulateCooldownUntil = Date.now() + MANIPULATE_COOLDOWN_MS
+
+  // 新闻
+  useNewsStore.getState().addEntry({
+    id: `manip_${Date.now()}`,
+    title: direction === 'up' ? '🚀 异常大单拉升' : '💥 砸盘大单',
+    description: `${assetId} 出现 ${(spendAmount / 1000).toFixed(0)}K 定向${direction === 'up' ? '买入' : '抛售'},价格${direction === 'up' ? '拉升' : '下挫'} ${(impact * 100).toFixed(1)}%`,
+    type: 'event',
+  })
+  useToastStore.getState().addToast(`${direction === 'up' ? '🚀 拉升' : '💥 砸盘'} ${assetId} ${(impact * 100).toFixed(1)}%`, direction === 'up' ? 'success' : 'danger')
+
+  return { ok: true, impact: signedImpact }
+}
+
+export function canManipulatePrice(): boolean {
+  return Date.now() >= manipulateCooldownUntil
+}
+
+export function getManipulateCooldownRemaining(): number {
+  return Math.max(0, Math.ceil((manipulateCooldownUntil - Date.now()) / 1000))
+}
+
 /** 同步国家数据到 store */
 function syncCountryData(country: CountryEngine): void {
   const snapshots: CountrySnapshot[] = country.getAllCountries().map(c => ({
@@ -282,6 +352,7 @@ export function useGameLoop() {
     const auction = new AuctionEngine()
     const intel = new IntelEngine()
     const offshore = new OffshoreEngine()
+    const objective = new ObjectiveEngine()
 
     engineRef.loop = loop
     engineRef.market = market
@@ -295,6 +366,7 @@ export function useGameLoop() {
     engineRef.auction = auction
     engineRef.intel = intel
     engineRef.offshore = offshore
+    engineRef.objective = objective
 
     // 初始化KOL
     useKOLStore.getState().setKOLs(kol.getKOLs())
@@ -302,6 +374,13 @@ export function useGameLoop() {
     // 设置角色天赋
     const character = useGameStore.getState().character
     if (character) trait.setCharacter(character)
+
+    // 初始化目标系统(用角色起始资金)
+    objective.init(useGameStore.getState().startCash)
+    useObjectiveStore.getState().set({ milestones: objective.getMilestones(), currentObjective: objective.getCurrentObjective() })
+
+    // 重置功能解锁(渐进式新手引导)
+    useGameStore.getState().resetFeatures()
 
     // 生成每局虚拟币并注册所有资产
     const virtualCoins = generateSessionCoins(4)
@@ -353,6 +432,80 @@ export function useGameLoop() {
         return sum + pos.amount * pos.avgEntry + (pos.avgEntry - price) * pos.amount
       }, 0)
       const total = playerState.cash + longValue + shortPnl
+
+      // 目标系统检查
+      const lastTrades = (globalThis as { __lastTrades?: number }).__lastTrades ?? 0
+      const tradeDelta = playerState.totalTrades - lastTrades
+      ;(globalThis as { __lastTrades?: number }).__lastTrades = playerState.totalTrades
+      const lastManip = (globalThis as { __lastManip?: number }).__lastManip ?? 0
+      const manipDelta = manipulateCounter - lastManip
+      ;(globalThis as { __lastManip?: number }).__lastManip = manipulateCounter
+      const objResult = objective.tick(total, total - useGameStore.getState().startCash, tradeDelta, manipDelta)
+      // 处理里程碑达成
+      for (const m of objResult.milestonesAchieved) {
+        useNewsStore.getState().addEntry({
+          id: `milestone_${m.stage}_${Date.now()}`,
+          title: `🏆 阶段 ${m.stage} 达成: ${m.label}`,
+          description: `总资产突破 ${formatMoney(m.target)}!`,
+          type: 'event',
+        })
+        SFX.unlock()
+        useObjectiveStore.getState().setLastAchieved(m)
+        useToastStore.getState().addToast(`🏆 阶段${m.stage}达成: ${m.label}`, 'success')
+      }
+      // 任务完成 → 发奖励
+      if (objResult.objectiveCompleted) {
+        usePlayerStore.setState({ cash: usePlayerStore.getState().cash + objResult.objectiveCompleted.reward })
+        useNewsStore.getState().addEntry({
+          id: `obj_done_${Date.now()}`,
+          title: '✅ 任务完成',
+          description: `${objResult.objectiveCompleted.description} 奖励 +${formatMoney(objResult.objectiveCompleted.reward)}`,
+          type: 'event',
+        })
+        SFX.unlock()
+        useToastStore.getState().addToast(`✅ 任务完成 +${formatMoney(objResult.objectiveCompleted.reward)}`, 'success')
+      }
+      // 任务过期
+      if (objResult.objectiveExpired) {
+        useNewsStore.getState().addEntry({
+          id: `obj_fail_${Date.now()}`,
+          title: '⏰ 任务超时',
+          description: objResult.objectiveExpired.description,
+          type: 'event',
+        })
+      }
+      // 新任务生成
+      if (objResult.newObjective) {
+        useNewsStore.getState().addEntry({
+          id: `obj_new_${Date.now()}`,
+          title: '🎯 新任务',
+          description: `${objResult.newObjective.description} (奖励 ${formatMoney(objResult.newObjective.reward)})`,
+          type: 'event',
+        })
+      }
+      useObjectiveStore.getState().set({ milestones: objective.getMilestones(), currentObjective: objective.getCurrentObjective() })
+
+      // 渐进解锁功能 tab(新手引导)
+      const elapsedMs = loop.getElapsed()
+      const startCash = useGameStore.getState().startCash
+      const unlocks = useGameStore.getState()
+      if (!unlocks.unlockedFeatures.includes('rug') && (elapsedMs >= 60_000 || total >= startCash * 2)) {
+        useGameStore.getState().unlockFeature('rug')
+        useToastStore.getState().addToast('🔓 解锁功能: 发币(空气币 rug-pull)', 'info')
+      }
+      if (!unlocks.unlockedFeatures.includes('auction') && (elapsedMs >= 120_000 || total >= startCash * 3)) {
+        useGameStore.getState().unlockFeature('auction')
+        useToastStore.getState().addToast('🔓 解锁功能: 沙特资源拍卖', 'info')
+      }
+      if (!unlocks.unlockedFeatures.includes('intel') && (elapsedMs >= 180_000 || total >= startCash * 5)) {
+        useGameStore.getState().unlockFeature('intel')
+        useToastStore.getState().addToast('🔓 解锁功能: 瑞士情报拍卖', 'info')
+      }
+      if (!unlocks.unlockedFeatures.includes('offshore') && (elapsedMs >= 180_000 || total >= startCash * 5)) {
+        useGameStore.getState().unlockFeature('offshore')
+        useToastStore.getState().addToast('🔓 解锁功能: 新加坡离岸账户', 'info')
+      }
+
       if (total < 100 && playerState.cash >= 0) {
         SFX.bankruptcy()
         useUnlockStore.getState().recordBankruptcy()
@@ -445,6 +598,7 @@ export function useGameLoop() {
 
         SFX.debunked()
         eventBus.emit('news:debunked', { id: news.id })
+        useToastStore.getState().addToast(`🎭 关于 ${news.assetId} 的假新闻被识破`, 'danger')
       }
 
       // ─── 沙特资源拍卖 ───
@@ -637,6 +791,7 @@ export function useGameLoop() {
       engineRef.auction = null
       engineRef.intel = null
       engineRef.offshore = null
+      engineRef.objective = null
     }
   }, [])
 

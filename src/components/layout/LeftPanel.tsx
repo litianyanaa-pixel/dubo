@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNewsStore, NEWS_TYPES, TRADE_TYPES, SOCIAL_TYPES, type NewsEntry } from '@/stores/newsStore'
 import type { ActiveFakeNews } from '@/stores/newsStore'
 import { useUnlockStore } from '@/stores/unlockStore'
+import { useGameStore } from '@/stores/gameStore'
 import { canManipulate, getCredibility, recordManipulation, launchRugToken, pumpRugToken, rugPullToken, getRugTokens, bidAuctionInsider, getAuctionPending, buyIntel, getIntelAvailable, depositOffshore, withdrawOffshore, openCarryTrade, closeCarryTrade, getOffshoreState } from '@/hooks/useGameLoop'
 import { SFX } from '@/utils/sound'
 import { usePlayerStore } from '@/stores/playerStore'
@@ -45,6 +46,7 @@ export default function LeftPanel() {
   const [tab, setTab] = useState<Tab>('news')
   const entries = useNewsStore((s) => s.entries)
   const selectedAsset = useSelectionStore((s) => s.selectedAsset)
+  const unlockedFeatures = useGameStore((s) => s.unlockedFeatures)
 
   const filtered = entries.filter((e) => {
     switch (tab) {
@@ -76,24 +78,30 @@ export default function LeftPanel() {
           ))}
         </div>
         <div className="flex gap-0.5 bg-bg-primary rounded p-0.5">
-          {TABS.filter(t => t.group === 'action').map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${
-                tab === t.key
-                  ? t.key === 'create' ? 'bg-danger/20 text-danger'
-                  : t.key === 'rug' ? 'bg-gold/20 text-gold'
-                  : t.key === 'auction' ? 'bg-warn/20 text-warn'
-                  : t.key === 'intel' ? 'bg-info/20 text-info'
-                  : t.key === 'offshore' ? 'bg-crypto/20 text-crypto'
-                  : 'bg-up/15 text-up'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TABS.filter(t => t.group === 'action').map((t) => {
+            const locked = t.key !== 'create' && !unlockedFeatures.includes(t.key)
+            return (
+              <button
+                key={t.key}
+                onClick={() => !locked && setTab(t.key)}
+                disabled={locked}
+                className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${
+                  locked
+                    ? 'text-text-muted/40 cursor-not-allowed'
+                    : tab === t.key
+                      ? t.key === 'create' ? 'bg-danger/20 text-danger'
+                      : t.key === 'rug' ? 'bg-gold/20 text-gold'
+                      : t.key === 'auction' ? 'bg-warn/20 text-warn'
+                      : t.key === 'intel' ? 'bg-info/20 text-info'
+                      : t.key === 'offshore' ? 'bg-crypto/20 text-crypto'
+                      : 'bg-up/15 text-up'
+                      : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {locked ? '🔒' : t.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
