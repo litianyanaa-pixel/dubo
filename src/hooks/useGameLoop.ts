@@ -28,6 +28,7 @@ import { useOffshoreStore } from '@/stores/offshoreStore'
 import { ALL_ASSETS, setSessionAssets } from '@/data/assets'
 import { generateSessionCoins } from '@/data/virtualCoins'
 import { SFX } from '@/utils/sound'
+import { formatMoney } from '@/utils/format'
 import type { TickLayer } from '@/engine/core/types'
 
 export interface EngineRefs {
@@ -590,6 +591,18 @@ export function useGameLoop() {
         description: data.content,
         type: 'kol_post',
       })
+    })
+
+    // 逮捕惩罚:冻结交易 30 秒 + 罚款现金 10%
+    eventBus.on('player:arrested', () => {
+      const result = usePlayerStore.getState().applyArrest(30_000, 0.10)
+      useNewsStore.getState().addEntry({
+        id: `arrest_${Date.now()}`,
+        title: '🚔 监管介入',
+        description: `你被逮捕!交易冻结 30 秒,现金罚款 ${formatMoney(result.fine)}`,
+        type: 'event',
+      })
+      SFX.bankruptcy()
     })
 
     const interval = setInterval(() => {

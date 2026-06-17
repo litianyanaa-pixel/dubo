@@ -5,14 +5,12 @@ import type { Candle } from '@/stores/marketStore'
 import { ALL_ASSETS } from '@/data/assets'
 
 const INSIDER_NEWS = [
-  '【内幕】据可靠线人透露，{asset}即将迎来重大利好政策',
-  '【内幕】某国央行内部会议纪要泄露：{asset}利率将调整',
-  '【内幕】大型机构正在暗中建仓{asset}，预计下周公告',
-  '【内幕】{asset}相关企业即将发布超预期财报',
-  '【内幕】政府高层已批准{asset}领域重大投资项目',
-  '【内幕】某主权基金计划增持{asset}头寸',
-  '【内幕】监管机构即将对{asset}市场出台新规',
-  '【内幕】{asset}供应链出现突发事件，影响待评估',
+  '据可靠线人透露,{asset} {direction} {magnitude}%,预计{trend}',
+  '某国央行内部纪要泄露:{asset} 即将 {direction} {magnitude}%',
+  '大型机构正在暗中建仓/减持 {asset},预计 {direction} {magnitude}%',
+  '{asset} 相关企业即将发布财报,内幕指向 {direction} {magnitude}%',
+  '主权基金计划调整 {asset} 头寸,方向 {direction} {magnitude}%',
+  '{asset} 供应链出现异动,监测到 {direction} {magnitude}% 资金流',
 ]
 
 export interface Prediction {
@@ -180,12 +178,21 @@ export class TraitEngine {
     const assets = ALL_ASSETS.map((a) => a.id)
     const asset = assets[Math.floor(Math.random() * assets.length)]
     const template = INSIDER_NEWS[Math.floor(Math.random() * INSIDER_NEWS.length)]
-    const content = template.replace('{asset}', asset)
+    // 生成方向(随机) + 幅度(1-4%) + 趋势描述
+    const isUp = Math.random() > 0.5
+    const magnitude = (1 + Math.random() * 3).toFixed(1)
+    const trend = isUp ? '上涨' : '下跌'
+    const direction = isUp ? '▲' : '▼'
+    const content = template
+      .replace('{asset}', asset)
+      .replace('{direction}', direction)
+      .replace('{magnitude}', magnitude)
+      .replace('{trend}', trend)
 
     useNewsStore.getState().addEntry({
       id: `insider_${Date.now()}`,
-      title: '🐕 内幕消息',
-      description: content,
+      title: `🐕 内幕消息 · ${asset}`,
+      description: `${content}(小道消息,真伪自辨)`,
       type: 'event',
     })
   }

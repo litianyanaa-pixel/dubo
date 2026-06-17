@@ -57,7 +57,14 @@ export default function GameOverScreen() {
   }, [])
 
   const handleRestart = () => {
-    usePlayerStore.setState({ cash: 100000, positions: {}, shorts: {}, totalTrades: 0 })
+    // 重置玩家状态:仓位清空,frozenUntil 清零;cash 用角色初始资金(与 App.handleStart 一致)
+    usePlayerStore.setState({
+      cash: character?.cash ?? 100000,
+      positions: {},
+      shorts: {},
+      totalTrades: 0,
+      frozenUntil: 0,
+    })
     useGameStore.setState({ phase: 'menu', character: null, elapsed: 0, speed: 1, showHelp: false, mode: 'standard' })
   }
 

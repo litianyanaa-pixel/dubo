@@ -98,9 +98,12 @@ export default function RightPanel() {
 
   return (
     <div className="w-[300px] bg-bg-panel border-l border-border-panel p-3 flex flex-col gap-3 text-sm overflow-y-auto">
-      {/* Wallet summary */}
+      {/* 冻结警告 + 操纵热度 */}
+      <StatusBar />
+
+      {/* Wallet summary - 全部持仓总览 */}
       <div>
-        <h3 className="text-text-secondary text-xs uppercase tracking-wider mb-2">持仓</h3>
+        <h3 className="text-text-secondary text-xs uppercase tracking-wider mb-2">全部持仓</h3>
         <div className={`bg-bg-primary rounded p-2 space-y-1 transition-colors duration-300 ${
           flash === 'up' ? 'ring-1 ring-up/50 bg-up/5' : flash === 'down' ? 'ring-1 ring-down/50 bg-down/5' : ''
         }`}>
@@ -108,27 +111,44 @@ export default function RightPanel() {
             <span className="text-text-muted">现金</span>
             <span className="text-gold">{formatMoney(cash)}</span>
           </div>
-          {longPos && (
-            <div className="flex justify-between">
-              <span className="text-up">多 {selectedAsset}</span>
-              <span className="text-text-primary">
-                {longPos.amount.toFixed(2)}
-                <span className={`ml-2 text-xs ${(assetPrice - longPos.avgCost) >= 0 ? 'text-up' : 'text-down'}`}>
-                  {(assetPrice - longPos.avgCost) >= 0 ? '+' : ''}{formatMoney((assetPrice - longPos.avgCost) * longPos.amount)}
+          {/* 所有多头仓位 */}
+          {Object.entries(positions).map(([id, pos]) => {
+            const p = prices[id] ?? 0
+            const pnl = (p - pos.avgCost) * pos.amount
+            const isSelected = id === selectedAsset
+            return (
+              <button
+                key={id}
+                onClick={() => useSelectionStore.getState().setSelectedAsset(id)}
+                className={`flex justify-between w-full text-left px-0.5 rounded ${isSelected ? 'bg-up/5' : 'hover:bg-bg-panel-hover'}`}
+              >
+                <span className="text-up">多 {id} <span className="text-text-muted text-[10px]">{pos.amount.toFixed(2)}</span></span>
+                <span className={`text-xs ${pnl >= 0 ? 'text-up' : 'text-down'}`}>
+                  {pnl >= 0 ? '+' : ''}{formatMoney(pnl)}
                 </span>
-              </span>
-            </div>
-          )}
-          {shortPos && (
-            <div className="flex justify-between">
-              <span className="text-down">空 {selectedAsset}</span>
-              <span className="text-text-primary">
-                {shortPos.amount.toFixed(2)}
-                <span className={`ml-2 text-xs ${shortPnl >= 0 ? 'text-up' : 'text-down'}`}>
-                  {shortPnl >= 0 ? '+' : ''}{formatMoney(shortPnl)}
+              </button>
+            )
+          })}
+          {/* 所有空头仓位 */}
+          {Object.entries(shorts).map(([id, pos]) => {
+            const p = prices[id] ?? pos.avgEntry
+            const pnl = (pos.avgEntry - p) * pos.amount
+            const isSelected = id === selectedAsset
+            return (
+              <button
+                key={id}
+                onClick={() => useSelectionStore.getState().setSelectedAsset(id)}
+                className={`flex justify-between w-full text-left px-0.5 rounded ${isSelected ? 'bg-down/5' : 'hover:bg-bg-panel-hover'}`}
+              >
+                <span className="text-down">空 {id} <span className="text-text-muted text-[10px]">{pos.amount.toFixed(2)}</span></span>
+                <span className={`text-xs ${pnl >= 0 ? 'text-up' : 'text-down'}`}>
+                  {pnl >= 0 ? '+' : ''}{formatMoney(pnl)}
                 </span>
-              </span>
-            </div>
+              </button>
+            )
+          })}
+          {Object.keys(positions).length === 0 && Object.keys(shorts).length === 0 && (
+            <p className="text-text-muted text-[10px] text-center py-1">暂无持仓</p>
           )}
         </div>
       </div>
@@ -434,6 +454,52 @@ function KOLPanel() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// --- 状态栏: 冻结警告 + 操纵热度 ---
+function StatusBar() {
+  const frozenUntil = usePlayerStore((s) => s.frozenUntil)
+  const manipulationScore = getEngineRefs().country?.getManipulationScore() ?? 0
+  const arrestThreshold = 15
+  // 每秒刷新(冻结倒计时实时更新)
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const i = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(i)
+  }, [])
+
+  const now = Date.now()
+  const frozenRemaining = Math.max(0, Math.ceil((frozenUntil - now) / 1000))
+  const isFrozen = frozenRemaining > 0
+  // 热度占比(0-100,超过 threshold 进入危险区)
+  const heatPct = Math.min(100, (manipulationScore / (arrestThreshold * 2)) * 100)
+  const heatColor = manipulationScore >= arrestThreshold ? 'text-danger' : manipulationScore >= arrestThreshold * 0.7 ? 'text-warn' : 'text-text-muted'
+  const heatBarColor = manipulationScore >= arrestThreshold ? 'bg-danger' : manipulationScore >= arrestThreshold * 0.7 ? 'bg-warn' : 'bg-up'
+
+  return (
+    <div className="space-y-1">
+      {isFrozen && (
+        <div className="bg-danger/15 border border-danger/40 rounded px-2 py-1 text-xs text-danger font-bold flex justify-between items-center animate-pulse">
+          <span>🚔 交易冻结中</span>
+          <span className="font-mono">{frozenRemaining}s</span>
+        </div>
+      )}
+      <div className="bg-bg-primary rounded px-2 py-1">
+        <div className="flex justify-between items-center text-[10px] mb-0.5">
+          <span className="text-text-muted">🔍 操纵热度</span>
+          <span className={`font-mono ${heatColor}`}>
+            {manipulationScore.toFixed(0)}{manipulationScore >= arrestThreshold ? ' ⚠危险' : ''}
+          </span>
+        </div>
+        <div className="w-full h-1 bg-bg-panel rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${heatBarColor}`}
+            style={{ width: `${heatPct}%` }}
+          />
+        </div>
+      </div>
     </div>
   )
 }

@@ -17,10 +17,15 @@ interface PlayerState {
   positions: Record<string, Position>
   shorts: Record<string, ShortPosition>
   totalTrades: number
+  /** 冻结到期的时间戳(Date.now())。> now 时禁止交易 */
+  frozenUntil: number
   openLong: (assetId: string, price: number, qty: number) => boolean
   closeLong: (assetId: string, price: number, qty: number) => boolean
   openShort: (assetId: string, price: number, qty: number) => boolean
   closeShort: (assetId: string, price: number, qty: number) => boolean
+  /** 逮捕惩罚:冻结 N 毫秒 + 罚款比例(0-1) */
+  applyArrest: (freezeMs: number, fineRatio: number) => { frozenUntil: number; fine: number }
+  isFrozen: () => boolean
 }
 
 export type { Position, ShortPosition }
@@ -30,11 +35,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   positions: {},
   shorts: {},
   totalTrades: 0,
+  frozenUntil: 0,
+
+  isFrozen: () => Date.now() < get().frozenUntil,
 
   // 买多: spend cash, acquire asset
   openLong: (assetId, price, qty) => {
-    const cost = price * qty
     const state = get()
+    if (Date.now() < state.frozenUntil) return false
+    const cost = price * qty
     if (cost > state.cash) return false
 
     const existing = state.positions[assetId]
@@ -57,6 +66,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // 平多: sell held asset, receive cash
   closeLong: (assetId, price, qty) => {
     const state = get()
+    if (Date.now() < state.frozenUntil) return false
     const existing = state.positions[assetId]
     if (!existing || existing.amount < qty) return false
 
@@ -77,6 +87,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // 开空: put up margin (100% of position value), profit = entry - exit
   openShort: (assetId, price, qty) => {
     const state = get()
+    if (Date.now() < state.frozenUntil) return false
     const margin = price * qty
     if (margin > state.cash) return false
 
@@ -100,6 +111,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // 平空: buy back asset to cover, profit = (entry - cover) * qty
   closeShort: (assetId, price, qty) => {
     const state = get()
+    if (Date.now() < state.frozenUntil) return false
     const existing = state.shorts[assetId]
     if (!existing || existing.amount < qty) return false
 
@@ -117,5 +129,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       totalTrades: state.totalTrades + 1,
     })
     return true
+  },
+
+  // 逮捕惩罚:冻结 + 罚款。返回冻结到期时间和罚款金额
+  applyArrest: (freezeMs, fineRatio) => {
+    const state = get()
+    const fine = Math.floor(state.cash * fineRatio)
+    const frozenUntil = Date.now() + freezeMs
+    set({
+      frozenUntil,
+      cash: Math.max(0, state.cash - fine),
+    })
+    return { frozenUntil, fine }
   },
 }))

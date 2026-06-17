@@ -22,7 +22,7 @@ export const NEWS_TEMPLATES: NewsTemplate[] = [
   { id: 'n09', title: '科技重大突破', description: '{target}科研机构宣布革命性技术', credibility: 50, priceDirection: 'up', priceMagnitude: 0.012, sentimentMagnitude: 18, cost: 10000 },
   { id: 'n10', title: '政治丑闻曝光', description: '{target}最高层爆出惊天贪腐丑闻', credibility: 55, priceDirection: 'down', priceMagnitude: 0.015, sentimentMagnitude: -20, cost: 10000 },
   { id: 'n11', title: '原油管道破裂', description: '主要输油管道发生严重泄漏', targetAsset: 'OIL', credibility: 60, priceDirection: 'up', priceMagnitude: 0.025, sentimentMagnitude: -12, cost: 8000 },
-  { id: 'n12', title: '黄金矿脉枯竭', description: '全球最大金矿宣布储量下调40%', targetAsset: 'GOLD', credibility: 55, priceDirection: 'up', priceMagnitude: 0.02, sentimentMagnitude: -12, cost: 10000 },
+  { id: 'n12', title: '黄金矿脉枯竭', description: '全球最大金矿宣布储量下调40%', targetAsset: 'DGOLD', credibility: 55, priceDirection: 'up', priceMagnitude: 0.02, sentimentMagnitude: -12, cost: 10000 },
   { id: 'n13', title: '主权基金入场', description: '{target}主权基金宣布千亿级投资计划', credibility: 75, priceDirection: 'up', priceMagnitude: 0.015, sentimentMagnitude: 15, cost: 15000 },
   { id: 'n14', title: '金融监管风暴', description: '{target}宣布全面加强金融监管', credibility: 65, priceDirection: 'down', priceMagnitude: 0.01, sentimentMagnitude: -10, cost: 8000 },
   { id: 'n15', title: '军事冲突升级', description: '{target}边境军事对峙全面升级', credibility: 55, priceDirection: 'down', priceMagnitude: 0.02, sentimentMagnitude: -25, cost: 12000 },
