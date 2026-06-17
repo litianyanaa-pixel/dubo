@@ -508,7 +508,7 @@ export function useGameLoop() {
 
     // L5 (60s): 地缘事件
     loop.onLayer(5 as TickLayer, () => {
-      const geoEvent = country.tick(market, sentiment)
+      const geoEvent = country.tick(market, sentiment, offshore.getShieldStrength())
       if (geoEvent) {
         if (geoEvent.targetAsset) {
           const asset = market.getAsset(geoEvent.targetAsset)

@@ -232,7 +232,7 @@ export class CountryEngine {
 
   // ─── L5 tick: 地缘事件 ───────────────────────────────
 
-  tick(market: MarketEngine, sentiment: SentimentEngine): GeopoliticalEvent | null {
+  tick(market: MarketEngine, sentiment: SentimentEngine, shieldStrength = 0): GeopoliticalEvent | null {
     // 衰减操纵分数
     this.manipulationScore = Math.max(0, this.manipulationScore - 1)
 
@@ -248,9 +248,11 @@ export class CountryEngine {
     // 更新现有战争
     const warEvents = this.updateWars()
 
-    // 逮捕风险
-    if (this.manipulationScore >= this.arrestThreshold) {
-      const arrestChance = (this.manipulationScore - this.arrestThreshold) * 0.05
+    // 逮捕风险(新加坡离岸账户的监管抵消降低有效操纵热度)
+    // shieldStrength: 0-100, 每 1 点抵消 0.5 点操纵分数(最高抵消 50)
+    const effectiveScore = Math.max(0, this.manipulationScore - shieldStrength * 0.5)
+    if (effectiveScore >= this.arrestThreshold) {
+      const arrestChance = (effectiveScore - this.arrestThreshold) * 0.05
       if (Math.random() < arrestChance) {
         this.manipulationScore = 0
         return {
